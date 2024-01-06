@@ -21,6 +21,20 @@ def complex_to_real(z):
     """
     return torch.cat([z.real, z.imag])   
 
+# def real_to_complex(x):
+#     """Convert a real representation of a complex tensor into its associated 
+#     complex tensor (see the description of the complex_to_real(*args) function)
+
+#     Args:
+#         z (torch.Tensor): real tensor of dimension 2*D 
+
+#     Returns:
+#         complex tensor of dimensions D
+#     """
+#     H, W = x.shape
+#     D = H//2 # width of the image in its complex representation
+#     return x[:D] + 1j * x[D:]
+
 def real_to_complex(x):
     """Convert a real representation of a complex tensor into its associated 
     complex tensor (see the description of the complex_to_real(*args) function)
@@ -31,6 +45,8 @@ def real_to_complex(x):
     Returns:
         complex tensor of dimensions D
     """
+    C, H, W = x.shape
+    D = H//2 # width of the image in its complex representation
     return x[0] + 1j * x[1]
 
 # score_prior --> score-based model, score_likelihood --> convolved likelihood approximation (see appendix https://arxiv.org/abs/2311.18012)
