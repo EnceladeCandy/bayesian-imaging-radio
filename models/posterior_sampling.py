@@ -65,36 +65,52 @@ def g(t, x, score_prior):
 def identity_model(x, t): 
     return x
 
-def score_posterior(y, x, t, sigma_y, forward_model, score_prior, score_likelihood): 
-    return score_prior.score(t, x) + score_likelihood(y, x, t, sigma_y, forward_model, score_prior)
+def score_posterior(t, x, y, sigma_y, forward_model, score_model, score_likelihood, model_parameters, tweedie):
+    if tweedie: 
+        sigma_t = sigma(t, score_model)[0].item() # During sampling every sample is evaluated at the same temperature so there's no issue with this
+        mu_t = mu(t, score_model)[0].item()
+        #tweedie_x = (x + sigma(t, score_model)**2 * score_model.score(t, x))/ mu(t, score_model)
+        tweedie_x = (x + sigma_t ** 2 * score_model.score(t, x)) / mu_t
+    else: 
+        tweedie_x = x
+    score_prior = score_model.score(t, x)
+    score_lh = score_likelihood(t, tweedie_x, y, sigma_y, forward_model=forward_model, score_model=score_model, model_parameters = model_parameters)
+    return score_prior + score_lh
 
-def link_function(x, C, B): 
-    """Mapping from the model space (where the score model is trained) to the image space (with meaningful physical units)
+def euler_sampler(y, sigma_y, forward_model, score_model, score_likelihood, model_parameters, num_samples, num_steps,  tweedie = False, keep_chain=False, test_time=False, img_size = (64, 64)):
+    """
+    Discretization of the Euler-Maruyama sampler 
 
     Args:
-        x (array, float...): image to map 
-        C (float): factor
-        B (float): constant
+        y (array): Observation
+        sigma_y (float): std of an isotropic gaussian that we sample to perturb the observation y
+        forward_model (function): physical model mapping a ground-truth x to a model \hat{y} 
+        score_model (function): Trained score-based model playing the role of a prior 
+        score_likelihood (function): see function score_likelihood 
+        model_parameters (tuple): parameters of the function score_likelihood
+        num_samples (int): number of samples to generate
+        num_steps (int): number of steps during the sampling procedure
+        tweedie (bool, optional): To enable a correction of the score of the posterior with Tweedie's formula. Defaults to False.
+        keep_chain (bool, optional): To analyze possible anomalies that may occur during the sampling procedure. Defaults to False.
+        test_time (bool, optional): Runs the loop for 20 iterations to evaluate time required for more iterations. Defaults to False.
+        img_size (tuple, optional): image size of the ground-truth x. Defaults to (64, 64) (= simulation)
 
     Returns:
-        x in image space
+        array: posterior samples 
     """
-    return C*x + B
-
-
-def euler_sampler(y, sigma_y, forward_model, score_prior, score_likelihood, num_samples, num_steps,  img_size = (64, 64)):
     t = torch.ones(size = (num_samples,1)).to(device)
-    sigma_max = sigma(t, score_prior)[0]
+    sigma_max = sigma(t, score_model)[0]
     x = sigma_max * torch.randn([num_samples, 1, *img_size]).to(device)
     dt = -1/num_steps 
-
+    
+    chain = []
     with torch.no_grad(): 
         for i in (pbar := tqdm(range(num_steps - 1))):
-            pbar.set_description(f"t = {t[0].item():.2f} | scale ~ {x.std():.2e} | sigma(t) = {sigma(t, score_prior)[0].item():.2e} | mu(t) = {mu(t, score_prior)[0].item():.2e}")
+            pbar.set_description(f"t = {t[0].item():.2f} | scale ~ {x.std():.2e} | sigma(t) = {sigma(t, score_model)[0].item():.2e} | mu(t) = {mu(t, score_model)[0].item():.2e}")
             z = torch.randn_like(x).to(device)
-            gradient = score_prior.score(t, x) + score_likelihood(y, x, t, sigma_y, forward_model)
-            drift = drift_fn(t, x, score_prior)
-            diffusion = g(t, x, score_prior)
+            gradient =  score_posterior(t, x, y, sigma_y, forward_model, score_model, score_likelihood, model_parameters, tweedie = tweedie)
+            drift = drift_fn(t, x, score_model)
+            diffusion = g(t, x, score_model)
             x_mean  = x + drift * dt - diffusion ** 2 * gradient * dt
             noise = diffusion * (-dt) ** 0.5 * z
             x = x_mean + noise
@@ -103,7 +119,18 @@ def euler_sampler(y, sigma_y, forward_model, score_prior, score_likelihood, num_
             if torch.isnan(x).any().item(): 
                 print("Nans appearing")
                 break
-    return x_mean  
+            if keep_chain: 
+                chain.append(x.cpu().numpy())
+
+            if test_time: 
+                if i==20: 
+                    break
+
+    if keep_chain: 
+        return x_mean, chain
+     
+    else: 
+        return x_mean 
 
 def pc_sampler(y, sigma_y, num_samples, num_pred_steps, num_corr_steps, score_function, snr = 1e-2, img_size = 28): 
         t = torch.ones(size = (num_samples, 1)).to(device)
