@@ -116,14 +116,16 @@ def euler_sampler(y, sigma_y, forward_model, score_model, score_likelihood, mode
             x = x_mean + noise
             t += dt
 
+            if t[0].item()<1e-6:
+                break
+
             if torch.isnan(x).any().item(): 
                 print("Nans appearing")
                 break
             if keep_chain: 
                 chain.append(x.cpu().numpy())
 
-            if test_time: 
-                if i==20: 
+            if test_time and i==20:
                     break
 
     if keep_chain: 
@@ -132,37 +134,57 @@ def euler_sampler(y, sigma_y, forward_model, score_model, score_likelihood, mode
     else: 
         return x_mean 
 
-def pc_sampler(y, sigma_y, num_samples, num_pred_steps, num_corr_steps, score_function, snr = 1e-2, img_size = 28): 
-        t = torch.ones(size = (num_samples, 1)).to(device)
-        x = sigma(t, score_prior) * torch.randn([num_samples, img_size ** 2]).to(device)
-        dt = -1/num_pred_steps
+def old_pc_sampler(y, sigma_y, forward_model, score_model, score_likelihood, model_parameters, num_samples, pc_params, tweedie = False, keep_chain = False, test_time = False, img_size = (64, 64)): 
+    pred_steps, corr_steps, snr = pc_params
+    
+    t = torch.ones(size = (num_samples,1)).to(device)
+    sigma_max = sigma(t, score_model)[0]
+    x = sigma_max * torch.randn([num_samples, 1, *img_size]).to(device)
+    dt = -1/pred_steps 
 
-        with torch.no_grad(): 
-            for _ in tqdm(range(num_pred_steps-1)): 
-                # Corrector step: (Only if we are not at 0 temperature )
-                gradient = score_function(y, x, t, sigma_y)
-                for _ in range(num_corr_steps): 
-                    z = torch.randn_like(x)
-                    grad_norm = torch.mean(torch.norm(gradient, dim = -1)) # mean of the norm of the score over the batch 
-                    noise_norm = torch.mean(torch.norm(z, dim = -1))
-                    epsilon =  2 * (snr * noise_norm / grad_norm) ** 2
-                    x = x + epsilon * gradient + (2 * epsilon) ** 0.5 * z * dt  
+    chain = []
+    with torch.no_grad(): 
+        for i in tqdm(range(pred_steps-1)): 
+            # Corrector step: (Only if we are not at 0 temperature )
+            gradient =  score_posterior(t, x, y, sigma_y, forward_model, score_model, score_likelihood, model_parameters, tweedie = tweedie)
+            for _ in range(corr_steps): 
+                z = torch.randn_like(x)
+                grad_norm = torch.mean(torch.norm(gradient, dim = -1)) # mean of the norm of the score over the batch 
+                noise_norm = torch.mean(torch.norm(z, dim = -1))
+                epsilon =  2 * (snr * noise_norm / grad_norm) ** 2
+                x = x + epsilon * gradient + (2 * epsilon) ** 0.5 * z * dt  
 
-                # Predictor step: 
-                z = torch.randn_like(x).to(device)
-                gradient = score_function(y, x, t, sigma_y)
-                drift = drift_fn(t, x, score_prior)
-                diffusion = g(t, x, score_prior)
-                x_mean = x + drift * dt - diffusion**2 * gradient * dt  
-                noise = diffusion * (-dt) ** 0.5 * z
-                x = x_mean + noise
-                t += dt
+            # Predictor step: 
+            z = torch.randn_like(x).to(device)
+            gradient =  score_posterior(t, x, y, sigma_y, forward_model, score_model, score_likelihood, model_parameters, tweedie = tweedie)
+            drift = drift_fn(t, x, score_model)
+            diffusion = g(t, x, score_model)
+            x_mean = x + drift * dt - diffusion**2 * gradient * dt  
+            noise = diffusion * (-dt) ** 0.5 * z
+            x = x_mean + noise
+            t += dt
 
-                if torch.isnan(x).any().item(): 
-                    print("Nans appearing, stopping sampling...")
+            # To avoid numerical instabilities due to vanishing variances
+            if t[0].item()<1e-6:
+                break
+
+            if torch.isnan(x).any().item(): 
+                print("Nans appearing, stopping sampling...")
+                break
+
+            if test_time and i==20:
+                break
+
+            if keep_chain: 
+                chain.append(x.cpu().numpy())
+
+            if test_time and i==20: 
                     break
-                
-        return x_mean          
+
+        if keep_chain: 
+            return x_mean, chain 
+        else: 
+            return x_mean            
 
 
 

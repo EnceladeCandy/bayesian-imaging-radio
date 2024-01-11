@@ -146,14 +146,12 @@ def log_likelihood(t, x, y, sigma_y, forward_model, score_model, model_parameter
     # Variance computed analytically with the convolved likelihood approximation
     var = sigma(t, score_model) ** 2/2 + mu(t, score_model)**2 * sigma_y ** 2
     var_0 = sigma(t, score_model) ** 2 + mu(t, score_model)**2 * sigma_y ** 2
-    diff = (y_hat - mu(t, score_model) * y)**2
-
-    # Residuals
-    res = diff/var
-    res[0] = diff[0]/var_0
+    diff = (y_hat - mu(t, score_model) * y)**2 / var
+    diff[0] = (y_hat[0] - mu(t, score_model) * y[0])**2 / var_0 
+    
 
     # Log probability
-    log_prob = - 0.5 * torch.sum(res)
+    log_prob = - 0.5 * torch.sum(diff)
     return log_prob
 
 def score_likelihood(t, x, y, sigma_y, forward_model, score_model, model_parameters): 
