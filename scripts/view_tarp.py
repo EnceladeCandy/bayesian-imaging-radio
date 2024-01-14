@@ -58,12 +58,15 @@ def main(args):
     samples_dir = args.samples_dir
 
     if "euler" in samples_dir: 
-        sampler = "euler"
-        B, C = 1/2, 1/2
+        sampler = "euler"  
     else: 
         sampler = "pc"
-        B, C = 1, 0
 
+    if "probes" in samples_dir:
+        B, C = 1/2, 1/2
+    else: 
+        B, C = 1, 0
+    
     pattern = experiment_name + "*.h5"
     paths = glob(samples_dir + pattern)
 
@@ -108,7 +111,7 @@ def main(args):
     im = axs[0].imshow(theta[k].reshape(img_size, img_size), cmap = "magma")
     plt.colorbar(im, fraction = 0.046, ax = axs[0])
     for i in range(1, 5):
-        im = axs[i].imshow(samples[i, k].reshape(img_size, img_size), cmap = "magma")
+        im = axs[i].imshow(samples[i, 799].reshape(img_size, img_size), cmap = "magma")
         plt.colorbar(im, fraction = 0.046, ax = axs[i])
    
     results_dir = args.results_dir
@@ -136,7 +139,7 @@ def main(args):
         fig, ax = plt.subplots(1, 1, figsize=(6, 6), dpi = 150)
         ax.plot([0, 1], [0, 1], ls='--', color='k', label = "Ideal case")
         ax.plot(alpha, ecp, label='DRP', color = "red")
-        ax.fill_between(alpha, ecp - k*ecp_std, ecp + k* ecp_std, alpha = 0.5, color = "red", label = "99.7\% CI")
+        ax.fill_between(alpha, ecp - k * ecp_std, ecp + k * ecp_std, alpha = 0.5, color = "red", label = "99.7\% CI")
         ax.legend()
         ax.set_ylabel("Expected Coverage Probability")
         ax.set_xlabel("Credibility Level")
@@ -148,8 +151,9 @@ def main(args):
         ax.set(xlim = [0, 1], ylim = [0, 1])
         
         plt.savefig(save_dir +  f"/bst_{sampler}_{args.experiment_name}_{args.output_name}.pdf", bbox_inches = "tight", pad_inches = 0.2)
-        plt.title(args.title, fontsize = 20)
-        plt.savefig(save_dir + f"/bst_{sampler}_{args.experiment_name}_{args.output_name}_with_title.pdf")
+        if args.title:
+            plt.title(args.title, fontsize = 20)
+            plt.savefig(save_dir + f"/bst_{sampler}_{args.experiment_name}_{args.output_name}_with_title.pdf")
     else: 
         print("Applying a regular method")
         ecp, alpha = get_drp_coverage(samples, theta, references = "random", metric = "euclidean", norm = True)
@@ -163,8 +167,9 @@ def main(args):
         ax.set_xlabel("Credibility Level")
 
         plt.savefig(save_dir + f"/{sampler}_{args.experiment_name}_{args.output_name}.jpeg", bbox_inches = "tight", pad_inches = 0.2)
-        plt.title(args.title, fontsize = 20)
-        plt.savefig(save_dir + f"/{sampler}_{args.experiment_name}_{args.output_name}_with_title.jpeg")    
+        if args.title:
+            plt.title(args.title, fontsize = 20)
+            plt.savefig(save_dir + f"/{sampler}_{args.experiment_name}_{args.output_name}_with_title.jpeg")    
 
 
 
