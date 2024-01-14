@@ -1,3 +1,17 @@
+"""
+Author: Noé Dia and Alexandre Adam 
+
+Objective: 
+Simulate an observation and generate posterior samples associated to a known ground-truth. 
+The ground-truth is sampled from a score-based model and a forward model simulates an observation 
+from a radio interferometer with isotropic gaussian noise (see https://arxiv.org/pdf/2311.18012.pdf 
+for more information on the forward model used).
+
+This code creates an h5 file containing the ground truth, the associated posterior samples, the observation
+and the reconstructions obtained by forward modeling each posterior sample. 
+"""
+
+
 import torch 
 import numpy as np
 import os
@@ -118,6 +132,7 @@ def main(args):
             else : 
                 raise ValueError("The sampler specified is not implemented or does not exist. Choose between 'euler' and 'pc'")
             
+            samples = link_function(samples, B, C)
             hf["model"][i*batch_size: (i+1)*batch_size] = samples.cpu().numpy().astype(np.float32)
 
             # Let's hope it doesn't take too much time compared to the posterior sampling:
@@ -133,9 +148,9 @@ def main(args):
                 import matplotlib.pyplot as plt
                 fig, axs = plt.subplots(1, 2, figsize = (8, 4))
                 im = axs[0].imshow(samples[0].squeeze().cpu(), cmap = "magma")
-                plt.colorbar(im)
+                plt.colorbar(im, ax = axs[0])
                 im = axs[1].imshow(ground_truth[0].squeeze().cpu(), cmap = "magma")
-                plt.colorbar(im)
+                plt.colorbar(im, ax = axs[1])
                 plt.savefig("/home/noedia/scratch/bayesian_imaging_radio/tarp_samples/sanity_posterior.jpeg", bbox_inches = "tight")
 
 
@@ -151,8 +166,6 @@ if __name__ == "__main__":
     # Experiments spec
     parser.add_argument("--results_dir",        required = True,                                    help = "Directory where to save the TARP files")
     parser.add_argument("--experiment_name",    required = True,                                    help = "Prefix for the name of the file")
-    
-
     parser.add_argument("--model_pixels",       required = True,                    type = int)
     
     # Sampling parameters
