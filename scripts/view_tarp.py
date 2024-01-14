@@ -111,7 +111,7 @@ def main(args):
     im = axs[0].imshow(theta[k].reshape(img_size, img_size), cmap = "magma")
     plt.colorbar(im, fraction = 0.046, ax = axs[0])
     for i in range(1, 5):
-        im = axs[i].imshow(samples[i, 799].reshape(img_size, img_size), cmap = "magma")
+        im = axs[i].imshow(samples[i, k].reshape(img_size, img_size), cmap = "magma")
         plt.colorbar(im, fraction = 0.046, ax = axs[i])
    
     results_dir = args.results_dir
