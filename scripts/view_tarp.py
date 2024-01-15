@@ -92,6 +92,8 @@ def main(args):
         except OSError:
             num_corrupted_files +=1
             idx_corrupted_files.append(i)
+        if args.debug_mode: 
+            break
 
     if num_corrupted_files != 0: 
         print(f"Detected {num_corrupted_files} corrupted file(s):")
@@ -131,14 +133,14 @@ def main(args):
     
     labels = [0., 0.2, 0.4, 0.6, 0.8, 1]
     if args.method.lower() == "default":
-        ecp, alpha = get_drp_coverage(samples, theta, references = "random", metric = "euclidean", norm = True)
+        ecp, alpha = get_drp_coverage(samples, theta, references = "random", metric = "euclidean", norm = False)
 
     elif args.method.lower() == "bootstrapping": 
         ecp, ecp_std, alpha = bootstrapping(samples, theta, references = "random", metric = "euclidean", norm = False, debug_mode = args.debug_mode, num_points = args.num_points)
         print("Applying bootstrapping method")
 
     elif args.method.lower() == "mean": 
-        ecp, ecp_std, alpha = mean_coverage(samples, theta, references = "random", metric = "euclidean", norm = True, debug_mode = args.debug_mode, num_points = args.num_points)
+        ecp, ecp_std, alpha = mean_coverage(samples, theta, references = "random", metric = "euclidean", norm = False, debug_mode = args.debug_mode, num_points = args.num_points)
     
     else: 
         raise ValueError("The method specified does not exist. Choose between 'default', 'mean' and 'bootstrapping'")
@@ -152,8 +154,8 @@ def main(args):
         ax.fill_between(alpha, ecp - k * ecp_std, ecp + k * ecp_std, alpha = 0.5, color = "red", label = "99.7\% CI")
 
     ax.legend()
-    ax.set_ylabel("Expected Coverage Probability")
     ax.set_xlabel("Credibility Level")
+    ax.set_ylabel("Expected Coverage Probability")
     ax.set_xticks(labels)
     ax.set_xticklabels(labels)
     ax.set_yticks(labels[1:])

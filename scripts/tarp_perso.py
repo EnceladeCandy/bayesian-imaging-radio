@@ -107,8 +107,8 @@ def mean_coverage(samples, theta, references = "random", metric = "euclidean", n
     num_sims = samples.shape[1]
     num_dims = samples.shape[2]
 
-    alpha = np.empty(shape = (num_sims, num_sims//10))
-    ecp = np.empty(shape = (num_sims, num_sims//10))
+    alpha = np.empty(shape = (num_sims, num_points + 2))
+    ecp = np.empty(shape = (num_sims, num_points + 2))
     for i in tqdm(range(num_sims)): 
         ecp[i, :], alpha[i, :] = get_drp_coverage(samples, theta, references = references, metric = metric, norm = norm, num_points=num_points)
         if debug_mode == True: 
