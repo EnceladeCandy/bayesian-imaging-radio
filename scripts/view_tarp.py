@@ -20,7 +20,7 @@ from glob import glob
 import h5py
 from tqdm import tqdm
 import scienceplots
-from tarp_perso import bootstrapping, get_drp_coverage
+from tarp_perso import bootstrapping, get_drp_coverage, mean_coverage
 import matplotlib.pylab as pylab
 
 sys.path.append("../models")
@@ -29,7 +29,7 @@ from forward_model import link_function
 plt.style.use("science") # Need SciencePLots
 params = {
          'axes.labelsize': 40,
-         'axes.titlesize': 40,
+         'axes.titlesize': 20,
          'ytick.labelsize' : 15,
          'xtick.labelsize' : 15,
          'xtick.major.size': 4,
@@ -70,6 +70,7 @@ def main(args):
     pattern = experiment_name + "*.h5"
     paths = glob(samples_dir + pattern)
 
+    assert len(paths)>0, "The indicated samples directory does not include any file respecting the experiment name specified."
     num_samples = args.num_samples
     num_sims = len(paths)
     num_dims = args.img_size ** 2
@@ -129,47 +130,41 @@ def main(args):
     print("Running the tarp test...")
     
     labels = [0., 0.2, 0.4, 0.6, 0.8, 1]
-    if args.bootstrapping: 
-        print("Applying bootstrapping method")
-        k = args.uncertainty
-        ecp, ecp_std, alpha = bootstrapping(samples, theta, references = "random", metric = "euclidean", norm = False, debug_mode = args.debug_mode)
-        ecp, ecp_std, alpha = np.insert(ecp, 0, 0), np.insert(ecp_std, 0, 0), np.insert(alpha, 0, 0)
-        ecp, ecp_std, alpha = np.append(ecp, 1), np.append(ecp_std, 0), np.append(alpha, 1)
-        #print(ecp.shape)
-        fig, ax = plt.subplots(1, 1, figsize=(6, 6), dpi = 150)
-        ax.plot([0, 1], [0, 1], ls='--', color='k', label = "Ideal case")
-        ax.plot(alpha, ecp, label='DRP', color = "red")
-        ax.fill_between(alpha, ecp - k * ecp_std, ecp + k * ecp_std, alpha = 0.5, color = "red", label = "99.7\% CI")
-        ax.legend()
-        ax.set_ylabel("Expected Coverage Probability")
-        ax.set_xlabel("Credibility Level")
-        ax.set_xticks(labels)
-        ax.set_xticklabels(labels)
-        ax.set_yticks(labels[1:])
-        ax.set_yticklabels(labels[1:])
-
-        ax.set(xlim = [0, 1], ylim = [0, 1])
-        
-        plt.savefig(save_dir +  f"/bst_{sampler}_{args.experiment_name}_{args.output_name}.pdf", bbox_inches = "tight", pad_inches = 0.2)
-        if args.title:
-            plt.title(args.title, fontsize = 20)
-            plt.savefig(save_dir + f"/bst_{sampler}_{args.experiment_name}_{args.output_name}_with_title.pdf")
-    else: 
-        print("Applying a regular method")
+    if args.method.lower() == "default":
         ecp, alpha = get_drp_coverage(samples, theta, references = "random", metric = "euclidean", norm = True)
-        ecp, alpha = np.insert(ecp, 0, 0), np.insert(alpha, 0, 0)
-        print(ecp.shape)
-        fig, ax = plt.subplots(1, 1, figsize=(6, 6), dpi = 150)
-        ax.plot([0, 1], [0, 1], ls='--', color='k', label = "Ideal case")
-        ax.plot(alpha, ecp, label='DRP', color = "red")
-        ax.legend()
-        ax.set_ylabel("Expected Coverage")
-        ax.set_xlabel("Credibility Level")
 
-        plt.savefig(save_dir + f"/{sampler}_{args.experiment_name}_{args.output_name}.jpeg", bbox_inches = "tight", pad_inches = 0.2)
-        if args.title:
-            plt.title(args.title, fontsize = 20)
-            plt.savefig(save_dir + f"/{sampler}_{args.experiment_name}_{args.output_name}_with_title.jpeg")    
+    elif args.method.lower() == "bootstrapping": 
+        ecp, ecp_std, alpha = bootstrapping(samples, theta, references = "random", metric = "euclidean", norm = False, debug_mode = args.debug_mode, num_points = args.num_points)
+        print("Applying bootstrapping method")
+
+    elif args.method.lower() == "mean": 
+        ecp, ecp_std, alpha = mean_coverage(samples, theta, references = "random", metric = "euclidean", norm = True, debug_mode = args.debug_mode, num_points = args.num_points)
+    
+    else: 
+        raise ValueError("The method specified does not exist. Choose between 'default', 'mean' and 'bootstrapping'")
+    
+    fig, ax = plt.subplots(1, 1, figsize=(6, 6), dpi = 150)
+    ax.plot([0, 1], [0, 1], ls='--', color='k', label = "Ideal case")
+    ax.plot(alpha, ecp, label='DRP', color = "red")
+
+    if args.uncertainty: 
+        k = args.uncertainty # uncertainty interval = k * sigma
+        ax.fill_between(alpha, ecp - k * ecp_std, ecp + k * ecp_std, alpha = 0.5, color = "red", label = "99.7\% CI")
+
+    ax.legend()
+    ax.set_ylabel("Expected Coverage Probability")
+    ax.set_xlabel("Credibility Level")
+    ax.set_xticks(labels)
+    ax.set_xticklabels(labels)
+    ax.set_yticks(labels[1:])
+    ax.set_yticklabels(labels[1:])
+
+    ax.set(xlim = [0, 1], ylim = [0, 1])
+    
+    plt.savefig(save_dir +  f"/{args.method}_{sampler}_{args.experiment_name}_{args.output_name}.pdf", bbox_inches = "tight", pad_inches = 0.2)
+    if args.title:
+        plt.title(args.title, fontsize = 20)
+        plt.savefig(save_dir + f"/{args.method}_{sampler}_{args.experiment_name}_{args.output_name}_with_title.pdf")    
 
 
 
@@ -177,16 +172,17 @@ if __name__ == '__main__':
     from argparse import ArgumentParser
     parser = ArgumentParser()
 
-    parser.add_argument("--title",          required = False,       help = "Title of the plot",                                      default = "Euler")
-    parser.add_argument("--bootstrapping",  required = False,  default = False, help = "Whether to apply bootstrapping or not for the tarp test", type = bool)
-    parser.add_argument("--uncertainty",    required = False,      help = "Size of the uncertainty zone in the plot", type = float, default = 3)
-    parser.add_argument("--experiment_name",required = True,   type = str, help = "Same experiment name as the one used in inference_sim.py to generate the samples")
-    parser.add_argument("--output_name",    required = False,  type = str, help = "Optional. Marker at the end of the plot file to distinguish multiple tarp experiments")
+    parser.add_argument("--title",          required = False,                                       help = "Title of the plot")
+    parser.add_argument("--method",         required = False,  type = str,   default = False,       help = "Method to use for the TARP figure ('bootstrapping', 'default', 'mean')")
+    parser.add_argument("--uncertainty",    required = False,  type = float, default = 0,           help = "Size of the uncertainty zone in the plot",)
+    parser.add_argument("--experiment_name",required = True,   type = str,                          help = "Same experiment name as the one used in inference_sim.py to generate the samples")
+    parser.add_argument("--output_name",    required = False,  type = str,                          help = "Optional. Marker at the end of the plot file to distinguish multiple tarp experiments")
     parser.add_argument("--img_size",   type = int)
 
-    parser.add_argument("--num_samples",    required = True,   type = int, help = "Number of posterior samples per simulation")
-    parser.add_argument("--samples_dir",    required = True,   type = str, help = "Directory of the posterior samples")
-    parser.add_argument("--results_dir",    required = True,   type = str, help = "Directory where the generated plots will be saved. Automatically creates one folder 'sanity_check' and another folder 'coverage_plot'")
-    parser.add_argument("--debug_mode",     required = False,   default = False, type = bool, help = "Activate debug mode")
+    parser.add_argument("--num_samples",    required = True,   type = int,                          help = "Number of posterior samples per simulation")
+    parser.add_argument("--samples_dir",    required = True,   type = str,                          help = "Directory of the posterior samples")
+    parser.add_argument("--results_dir",    required = True,   type = str,                          help = "Directory where the generated plots will be saved. Automatically creates one folder 'sanity_check' and another folder 'coverage_plot'")
+    parser.add_argument("--num_points",     required = False,  type = int,   default = 50,          help = "Number of points in the coverage figure")
+    parser.add_argument("--debug_mode",     required = False,  type = bool,  default = False,       help = "Activate debug mode")
     args = parser.parse_args()
     main(args) 
