@@ -77,7 +77,7 @@ def score_posterior(t, x, y, sigma_y, forward_model, score_model, score_likeliho
     score_lh = score_likelihood(t, tweedie_x, y, sigma_y, forward_model=forward_model, score_model=score_model, model_parameters = model_parameters)
     return score_prior + score_lh
 
-def euler_sampler(y, sigma_y, forward_model, score_model, score_likelihood, model_parameters, num_samples, num_steps,  tweedie = False, keep_chain=False, test_time=False, img_size = (64, 64)):
+def euler_sampler(y, sigma_y, forward_model, score_model, score_likelihood, model_parameters, num_samples, num_steps,  tweedie = False, keep_chain=False, debug_mode=False, img_size = (64, 64)):
     """
     Discretization of the Euler-Maruyama sampler 
 
@@ -92,11 +92,11 @@ def euler_sampler(y, sigma_y, forward_model, score_model, score_likelihood, mode
         num_steps (int): number of steps during the sampling procedure
         tweedie (bool, optional): To enable a correction of the score of the posterior with Tweedie's formula. Defaults to False.
         keep_chain (bool, optional): To analyze possible anomalies that may occur during the sampling procedure. Defaults to False.
-        test_time (bool, optional): Runs the loop for 20 iterations to evaluate time required for more iterations. Defaults to False.
+        debug_mode (bool, optional): Runs the loop for 20 iterations to evaluate time required for more iterations. Defaults to False.
         img_size (tuple, optional): image size of the ground-truth x. Defaults to (64, 64) (= simulation)
 
     Returns:
-        array: posterior samples 
+        array: posterior samples shape = (num_samples, 1, img_size, img_size) 
     """
     t = torch.ones(size = (num_samples,1)).to(device)
     sigma_max = sigma(t, score_model)[0]
@@ -125,7 +125,7 @@ def euler_sampler(y, sigma_y, forward_model, score_model, score_likelihood, mode
             if keep_chain: 
                 chain.append(x.cpu().numpy())
 
-            if test_time and i==20:
+            if debug_mode and i==20:
                     break
 
     if keep_chain: 
@@ -134,7 +134,7 @@ def euler_sampler(y, sigma_y, forward_model, score_model, score_likelihood, mode
     else: 
         return x_mean 
 
-def old_pc_sampler(y, sigma_y, forward_model, score_model, score_likelihood, model_parameters, num_samples, pc_params, tweedie = False, keep_chain = False, test_time = False, img_size = (64, 64)): 
+def old_pc_sampler(y, sigma_y, forward_model, score_model, score_likelihood, model_parameters, num_samples, pc_params, tweedie = False, keep_chain = False, debug_mode = False, img_size = (64, 64)): 
     pred_steps, corr_steps, snr = pc_params
     
     t = torch.ones(size = (num_samples,1)).to(device)
@@ -172,13 +172,13 @@ def old_pc_sampler(y, sigma_y, forward_model, score_model, score_likelihood, mod
                 print("Nans appearing, stopping sampling...")
                 break
 
-            if test_time and i==20:
+            if debug_mode and i==20:
                 break
 
             if keep_chain: 
                 chain.append(x.cpu().numpy())
 
-            if test_time and i==20: 
+            if debug_mode and i==20: 
                     break
 
         if keep_chain: 
@@ -186,5 +186,61 @@ def old_pc_sampler(y, sigma_y, forward_model, score_model, score_likelihood, mod
         else: 
             return x_mean            
 
+def pc_sampler(y, sigma_y, forward_model, score_model, score_likelihood, model_parameters, num_samples, pc_params, tweedie = False, keep_chain = False, debug_mode = False, img_size = (64, 64)): 
+    pred_steps, corr_steps, snr = pc_params
+    
+    t = torch.ones(size = (num_samples,1)).to(device)
+    sigma_max = sigma(t, score_model)[0]
+    x = sigma_max * torch.randn([num_samples, 1, *img_size]).to(device)
+    dt = -1/pred_steps 
 
+    chain = []
 
+    if score_likelihood is None: 
+        print("score_likelihood arg is None. Sampling directly from the learned prior.")
+    with torch.no_grad(): 
+        for i in tqdm(range(pred_steps-1)): 
+            # Corrector step: (Only if we are not at 0 temperature )
+            if score_likelihood is None:
+                gradient = score_model.score(t, x)
+            else:
+                gradient =  score_posterior(t, x, y, sigma_y, forward_model, score_model, score_likelihood, model_parameters, tweedie = tweedie)
+            for _ in range(corr_steps): 
+                z = torch.randn_like(x)
+                # grad_norm = torch.mean(torch.norm(gradient, dim = -1)) # mean of the norm of the score over the batch 
+                # noise_norm = torch.mean(torch.norm(z, dim = -1))
+                epsilon =  (snr * sigma(t, score_model)[0].item()) ** 2 
+                x = x + epsilon * gradient + (2 * epsilon) ** 0.5 * z 
+
+            # Predictor step: 
+            z = torch.randn_like(x).to(device)
+            
+            if score_likelihood is None: 
+                gradient = score_model.score(t, x)
+            else: 
+                gradient =  score_posterior(t, x, y, sigma_y, forward_model, score_model, score_likelihood, model_parameters, tweedie = tweedie)
+            drift = drift_fn(t, x, score_model)
+            diffusion = g(t, x, score_model)
+            x_mean = x + drift * dt - diffusion**2 * gradient * dt  
+            noise = diffusion * (-dt) ** 0.5 * z
+            x = x_mean + noise
+            t += dt
+
+            # To avoid numerical instabilities due to vanishing variances
+            if t[0].item()<1e-6:
+                break
+
+            if torch.isnan(x).any().item(): 
+                print("Nans appearing, stopping sampling...")
+                break
+
+            if debug_mode and i==20:
+                break
+
+            if keep_chain: 
+                chain.append(x.cpu().numpy())
+
+        if keep_chain: 
+            return x_mean, chain 
+        else: 
+            return x_mean  
