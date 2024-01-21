@@ -97,9 +97,10 @@ def get_drp_coverage(
     f = np.sum((samples_distances < theta_distances), axis=0) / num_samples
 
     # Compute expected coverage
-    h, alpha = np.histogram(f, density=True, bins=num_sims // 10)
+    h, alpha = np.histogram(f, density=True, bins= num_points)
     dx = alpha[1] - alpha[0]
     ecp = np.cumsum(h) * dx
+    print(add_values(ecp).shape)
     return add_values(ecp), add_values(alpha[1:])
 
 def mean_coverage(samples, theta, references = "random", metric = "euclidean", norm = True, num_points = 50, debug_mode = False): 
