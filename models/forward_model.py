@@ -22,7 +22,7 @@ def ft(x):
     if type(x) == np.ndarray: 
         return np.fft.fft2(x, norm = "ortho")
     
-    if type(x) == torch.Tensor: 
+    elif type(x) == torch.Tensor: 
         return torch.fft.fft2(x, norm = "ortho")
     
 
@@ -67,7 +67,12 @@ def noise_padding(x, pad, sigma):
     Returns:
         out (torch.Tensor): noise padded version of the input
     """
-    _, H, W = x.shape
+
+    # To manage batched input
+    if len(x.shape)<4:
+        _, H, W = x.shape
+    else: 
+        _, _, H, W = x.shape
     out = torch.nn.functional.pad(x, (pad, pad, pad, pad)) 
     # Create a mask for padding region
     mask = torch.ones_like(out)
@@ -119,12 +124,12 @@ def model_to_plot(t, x, score_model, model_parameters):
     x = link_function(x, B= B, C = C)  
     x_padded = noise_padding(x, pad = pad, sigma = sigma(t, score_model))
     vis_sampled = ft(x_padded) * sampling_function.to(torch.uint8)
-    return complex_to_real(vis_sampled)
+    return torch.cat([vis_sampled.real, vis_sampled.imag])
 
 
-# Defining log-likelihood + likelihood score
 def log_likelihood(t, x, y, sigma_y, forward_model, score_model, model_parameters):
-    """Compute the log-likelihood following the convolved likelihood approximation 
+    """
+    Compute the log-likelihood following the convolved likelihood approximation 
     (see Appendix A of https://arxiv.org/abs/2311.18012)
 
     Args:
