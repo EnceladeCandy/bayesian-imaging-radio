@@ -170,7 +170,7 @@ def main(args):
                     score_model = score_model, 
                     score_likelihood = score_likelihood, 
                     model_parameters = model_parameters,
-                    num_samples = num_samples,
+                    num_samples = batch_size,
                     pc_params = sampling_params,
                     img_size = (img_size, img_size), 
                     keep_chain = False, 
@@ -187,7 +187,7 @@ def main(args):
                     score_model = score_model, 
                     score_likelihood = score_likelihood, 
                     model_parameters = model_parameters,
-                    num_samples = num_samples,
+                    num_samples = batch_size,
                     pc_params = sampling_params,
                     img_size = (img_size, img_size), 
                     keep_chain = False, 
@@ -198,10 +198,10 @@ def main(args):
             
             hf["model"][i*batch_size: (i+1)*batch_size] = link_function(samples.cpu().numpy().astype(np.float32), B, C)
 
-            # Let's hope it doesn't take too much time compared to the posterior sampling:
+            # Forward modeling posterior samples 
             y_hat = torch.empty(size = (batch_size, 1, img_size, img_size)).to(device)
             for j in range(batch_size):
-                y_hat = model(t = torch.zeros(1).to(device), 
+                y_hat[j] = model(t = torch.zeros(1).to(device), 
                               x = samples[j],
                               score_model = score_model, 
                               model_parameters = model_parameters)
@@ -233,7 +233,8 @@ def main(args):
             "dataset": dataset,
             "sde": sde, 
             "experiment_name": args.experiment_name, 
-            "sampling_params": {"predictor_steps": num_pred, }
+            "sampling_params": list(sampling_params),
+            "sigma_y": sigma_y
         }
         filename = path+ f"/{args.experiment_name}.json"
         with open(filename, "w") as json_file: 
