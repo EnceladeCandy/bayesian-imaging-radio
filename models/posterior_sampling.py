@@ -19,7 +19,7 @@ def complex_to_real(z):
     Returns:
         real tensor of dimensions 2*D
     """
-    return torch.cat([z.real, z.imag])   
+    return torch.cat([z.real, z.imag], axis = -1)   
 
 # def real_to_complex(x):
 #     """Convert a real representation of a complex tensor into its associated 
