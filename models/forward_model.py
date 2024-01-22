@@ -100,12 +100,21 @@ def model(t, x, score_model, model_parameters):
     """
 
     sampling_function, B, C, pad= model_parameters
-    x = link_function(x, B, C)    
+    num_vis = sampling_function.sum()
+
+    # To support batched input (note: the input is not batched during inference due to the vmap function)
+    if len(x.shape) == 4: 
+        N, _, H, W = x.shape
+        sampling_function = sampling_function.tile(N, 1, 1)
+    else: 
+        N = 1
+    x = link_function(x, B, C)   
     x_padded = noise_padding(x, pad = pad, sigma = sigma(t, score_model))
     vis_sampled = ft(x_padded).squeeze()[sampling_function] # some troublesome bug makes the squeeze needed here
+    
+    vis_sampled = vis_sampled.reshape(N, num_vis)
     y_hat = complex_to_real(vis_sampled)
     return y_hat
-
 
 def model_to_plot(t, x, score_model, model_parameters):
     """
