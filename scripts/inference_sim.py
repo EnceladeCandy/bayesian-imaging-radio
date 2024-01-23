@@ -120,104 +120,113 @@ def main(args):
             debug_mode = debug_mode
         )
     else : 
-                raise ValueError("The sampler specified is not implemented or does not exist. Choose between 'euler' and 'pc'")
+         raise ValueError("The sampler specified is not implemented or does not exist. Choose between 'euler' and 'pc'")
     
     
-    with h5py.File(filename, "w") as hf:
-        hf.create_dataset("model", [args.num_samples, 1, args.model_pixels, args.model_pixels], dtype=np.float32)
+    total_samples = np.empty(shape = [args.num_samples, 1, args.model_pixels, args.model_pixels], dtype = np.float32)
+    #hf.create_dataset("model", [args.num_samples, 1, args.model_pixels, args.model_pixels], dtype=np.float32)
 
-        observation = model(t = torch.zeros(1).to(device), 
-                            x = ground_truth[0],
-                            score_model = score_model,
-                            model_parameters = model_parameters)
-        sigma_y = args.sigma_y
-        observation += sigma_y * torch.randn_like(observation)
+    observation = model(t = torch.zeros(1).to(device), 
+                        x = ground_truth[0],
+                        score_model = score_model,
+                        model_parameters = model_parameters)
+    sigma_y = args.sigma_y
+    observation += sigma_y * torch.randn_like(observation)
 
-        hf.create_dataset("reconstruction", [args.num_samples, observation.shape[0]], dtype=np.float32)
-        hf["observation"] = observation.cpu().numpy().astype(np.float32).squeeze()
-        hf["ground_truth"] = link_function(ground_truth, B, C).cpu().numpy().astype(np.float32).squeeze()
+    reconstruction = np.empty(shape = [args.num_samples, observation.shape[0]])
+    # hf.create_dataset("reconstruction", [args.num_samples, observation.shape[0]], dtype=np.float32)
+    # hf["observation"] = observation.cpu().numpy().astype(np.float32).squeeze()
+    # hf["ground_truth"] = link_function(ground_truth, B, C).cpu().numpy().astype(np.float32).squeeze()
+    
+    
+    for i in range(int(num_samples//batch_size)):
+        if sampler.lower() == "euler":
+            print("Using Euler-Maruyama sampler...")    
+            samples = euler_sampler(
+                y = observation,
+                sigma_y = sigma_y,
+                forward_model = model, 
+                score_model = score_model,
+                score_likelihood = score_likelihood, 
+                model_parameters = model_parameters,
+                num_samples = batch_size,
+                num_steps = num_pred,  
+                img_size = (img_size, img_size),
+                keep_chain = False,
+                debug_mode = debug_mode
+            )
+
+        elif sampler.lower() == "old_pc":
+            # pc_params = [(1000, 10, 1e-2), (1000, 100, 1e-2), (1000, 1000, 1e-3)]
+            # #pc_params = [(1000, 1000, 1e-3)]
+            # idx = int(THIS_WORKER//100)
+            # pred, corr, snr = pc_params[idx]
+
+            print(f"Sampling pc pred = {num_pred}, corr = {num_corr}, snr = {snr}")
+            
+            samples = old_pc_sampler(
+                y = observation,
+                sigma_y = sigma_y, 
+                forward_model = model, 
+                score_model = score_model, 
+                score_likelihood = score_likelihood, 
+                model_parameters = model_parameters,
+                num_samples = batch_size,
+                pc_params = sampling_params,
+                img_size = (img_size, img_size), 
+                keep_chain = False, 
+                debug_mode = debug_mode 
+            )
+        
+        elif sampler.lower() == "pc": 
+            print(f"Using pc sampler: {num_pred} predictor steps| {num_corr} corrector steps| snr = {snr}")
+            sampling_params = (num_pred, num_corr, snr)
+            samples = pc_sampler(
+                y = observation,
+                sigma_y = sigma_y, 
+                forward_model = model, 
+                score_model = score_model, 
+                score_likelihood = score_likelihood, 
+                model_parameters = model_parameters,
+                num_samples = batch_size,
+                pc_params = sampling_params,
+                img_size = (img_size, img_size), 
+                keep_chain = False, 
+                debug_mode = debug_mode 
+            )
+            
         
         
-        for i in range(int(num_samples//batch_size)):
-            if sampler.lower() == "euler":
-                print("Using Euler-Maruyama sampler...")    
-                samples = euler_sampler(
-                    y = observation,
-                    sigma_y = sigma_y,
-                    forward_model = model, 
-                    score_model = score_model,
-                    score_likelihood = score_likelihood, 
-                    model_parameters = model_parameters,
-                    num_samples = batch_size,
-                    num_steps = num_pred,  
-                    img_size = (img_size, img_size),
-                    keep_chain = False,
-                    debug_mode = debug_mode
-                )
+        #hf["model"][i*batch_size: (i+1)*batch_size] = link_function(samples.cpu().numpy().astype(np.float32), B, C)
 
-            elif sampler.lower() == "old_pc":
-                # pc_params = [(1000, 10, 1e-2), (1000, 100, 1e-2), (1000, 1000, 1e-3)]
-                # #pc_params = [(1000, 1000, 1e-3)]
-                # idx = int(THIS_WORKER//100)
-                # pred, corr, snr = pc_params[idx]
-
-                print(f"Sampling pc pred = {num_pred}, corr = {num_corr}, snr = {snr}")
-                
-                samples = old_pc_sampler(
-                    y = observation,
-                    sigma_y = sigma_y, 
-                    forward_model = model, 
-                    score_model = score_model, 
-                    score_likelihood = score_likelihood, 
-                    model_parameters = model_parameters,
-                    num_samples = batch_size,
-                    pc_params = sampling_params,
-                    img_size = (img_size, img_size), 
-                    keep_chain = False, 
-                    debug_mode = debug_mode 
-                )
-            
-            elif sampler.lower() == "pc": 
-                print(f"Using pc sampler: {num_pred} predictor steps| {num_corr} corrector steps| snr = {snr}")
-                sampling_params = (num_pred, num_corr, snr)
-                samples = pc_sampler(
-                    y = observation,
-                    sigma_y = sigma_y, 
-                    forward_model = model, 
-                    score_model = score_model, 
-                    score_likelihood = score_likelihood, 
-                    model_parameters = model_parameters,
-                    num_samples = batch_size,
-                    pc_params = sampling_params,
-                    img_size = (img_size, img_size), 
-                    keep_chain = False, 
-                    debug_mode = debug_mode 
-                )
-                
-            
-            
-            hf["model"][i*batch_size: (i+1)*batch_size] = link_function(samples.cpu().numpy().astype(np.float32), B, C)
-
-            # Forward modeling posterior samples 
-            y_hat = torch.empty(size = (batch_size, 1, img_size, img_size)).to(device)
-            for j in range(batch_size):
-                y_hat[j] = model(t = torch.zeros(1).to(device), 
-                              x = samples[j],
-                              score_model = score_model, 
-                              model_parameters = model_parameters)
-            hf["reconstruction"][i*batch_size: (i+1)*batch_size] = y_hat.cpu().numpy().astype(np.float32)
-
-            if args.sanity_plot: 
-                import matplotlib.pyplot as plt
-                fig, axs = plt.subplots(1, 2, figsize = (8, 4))
-                im = axs[0].imshow(link_function(ground_truth[0], B, C).squeeze().cpu(), cmap = "magma")
-                plt.colorbar(im, ax = axs[0])
-                axs[0].set_title("Ground-truth")
-                im = axs[1].imshow(link_function(samples[0], B, C).squeeze().cpu(), cmap = "magma")
-                plt.colorbar(im, ax = axs[1])
-                axs[1].set_title("Posterior sample")
-                
-                plt.savefig("/home/noedia/scratch/bayesian_imaging_radio/tarp_samples/sanity_posterior.jpeg", bbox_inches = "tight")
+        # Forward modeling posterior samples 
+        y_hat = model(t = torch.zeros(1).to(device), 
+                        x = samples,
+                        score_model = score_model, 
+                        model_parameters = model_parameters)
+        
+        total_samples[i * batch_size: (i+1) * batch_size] = samples.cpu().numpy().astype(np.float32)
+        reconstruction[i * batch_size: (i+1) * batch_size] = y_hat.squeeze().cpu().numpy().astype(np.float32)
+        # hf["reconstruction"][i*batch_size: (i+1)*batch_size] = y_hat.cpu().numpy().astype(np.float32)
+    np.savez(
+            path,  
+            ground_truth = link_function(ground_truth, B, C), 
+            samples = total_samples, 
+            observation = observation, 
+            reconstruction = reconstruction
+        )
+    
+    if args.sanity_plot: 
+        import matplotlib.pyplot as plt
+        fig, axs = plt.subplots(1, 2, figsize = (8, 4))
+        im = axs[0].imshow(link_function(ground_truth[0], B, C).squeeze().cpu(), cmap = "magma")
+        plt.colorbar(im, ax = axs[0])
+        axs[0].set_title("Ground-truth")
+        im = axs[1].imshow(link_function(samples[0], B, C).squeeze().cpu(), cmap = "magma")
+        plt.colorbar(im, ax = axs[1])
+        axs[1].set_title("Posterior sample")
+        
+        plt.savefig("/home/noedia/scratch/bayesian_imaging_radio/tarp_samples/sanity_posterior.jpeg", bbox_inches = "tight")
     
     # Saving a json file with the script parameters 
     if THIS_WORKER==1: 
@@ -246,25 +255,25 @@ if __name__ == "__main__":
     parser = ArgumentParser()
 
     # Likelihood parameters
-    parser.add_argument("--sigma_y",   required = True,                             type = float,   help = "The square root of the multiplier of the isotropic gaussian matrix")
+    parser.add_argument("--sigma_y",            required = True,                        type = float,   help = "The square root of the multiplier of the isotropic gaussian matrix")
+    parser.add_argument("--sampling_function",  required = True,                        type = str,     help = "Directory of the sampling function (generated via the gridding code")
     
     # Experiments spec
-    parser.add_argument("--results_dir",        required = True,                                    help = "Directory where to save the TARP files")
-    parser.add_argument("--experiment_name",    required = True,                                    help = "Prefix for the name of the file")
-    parser.add_argument("--model_pixels",       required = True,                    type = int)
+    parser.add_argument("--results_dir",        required = True,                                        help = "Directory where to save the TARP files")
+    parser.add_argument("--experiment_name",    required = True,                                        help = "Prefix for the name of the file")
+    parser.add_argument("--model_pixels",       required = True,                        type = int)
     
     # Sampling parameters
-    parser.add_argument("--sampler",            required = False,   default = "euler", type = str,     help = "Sampler used ('old_pc' or 'euler')")
-    parser.add_argument("--num_samples",        required = False,   default = 20,   type = int,     help = "Number of samples from the posterior to create")
-    parser.add_argument("--batch_size",         required = False,   default = 20,   type = int)
-    parser.add_argument("--num_pred",           required = False,   default = 1000, type = int,     help ="Number of iterations in the loop to compute the reverse sde")
-    parser.add_argument("--num_corr",           required = False,   default = 20,   type = int,     help ="Number of corrector steps for the reverse sde")
-    parser.add_argument("--snr",                required = False,   default = 1e-2, type = float)
-    parser.add_argument("--pad",                required = False,   default = 0,    type = int)
-    parser.add_argument("--sampling_function",  required = True)
+    parser.add_argument("--sampler",            required = False,   default = "euler",  type = str,     help = "Sampler used ('old_pc' or 'euler')")
+    parser.add_argument("--num_samples",        required = False,   default = 20,       type = int,     help = "Number of samples from the posterior to create")
+    parser.add_argument("--batch_size",         required = False,   default = 20,       type = int)
+    parser.add_argument("--num_pred",           required = False,   default = 1000,     type = int,     help ="Number of iterations in the loop to compute the reverse sde")
+    parser.add_argument("--num_corr",           required = False,   default = 20,       type = int,     help ="Number of corrector steps for the reverse sde")
+    parser.add_argument("--snr",                required = False,   default = 1e-2,     type = float)
+    parser.add_argument("--pad",                required = False,   default = 0,        type = int)
     parser.add_argument("--prior",              required = True)
-    parser.add_argument("--debug_mode",          required = False,   default = False,type = bool)
-    parser.add_argument("--sanity_plot",       required = False,   default = False,type = bool)
+    parser.add_argument("--debug_mode",         required = False,   default = False,    type = bool)
+    parser.add_argument("--sanity_plot",        required = False,   default = False,    type = bool)
     
     args = parser.parse_args()
     main(args) 
