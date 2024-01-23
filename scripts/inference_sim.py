@@ -79,9 +79,6 @@ def main(args):
     batch_size = args.batch_size
     num_samples = args.num_samples
     
-    path = args.results_dir + f"{sampler}/"
-    create_dir(path)
-    filename = os.path.join(path, args.experiment_name + f"_{THIS_WORKER}" + ".h5")
     
     # ground_truth = score_model.sample([1, 1, args.model_pixels, args.model_pixels], steps=num_pred)
     if sampler == "euler": 
@@ -133,7 +130,7 @@ def main(args):
     sigma_y = args.sigma_y
     observation += sigma_y * torch.randn_like(observation)
 
-    reconstruction = np.empty(shape = [args.num_samples, observation.shape[0]])
+    reconstruction = np.empty(shape = [args.num_samples, observation.shape[-1]])
     # hf.create_dataset("reconstruction", [args.num_samples, observation.shape[0]], dtype=np.float32)
     # hf["observation"] = observation.cpu().numpy().astype(np.float32).squeeze()
     # hf["ground_truth"] = link_function(ground_truth, B, C).cpu().numpy().astype(np.float32).squeeze()
@@ -204,15 +201,19 @@ def main(args):
                         x = samples,
                         score_model = score_model, 
                         model_parameters = model_parameters)
-        
+        print(reconstruction.shape)
         total_samples[i * batch_size: (i+1) * batch_size] = samples.cpu().numpy().astype(np.float32)
         reconstruction[i * batch_size: (i+1) * batch_size] = y_hat.squeeze().cpu().numpy().astype(np.float32)
         # hf["reconstruction"][i*batch_size: (i+1)*batch_size] = y_hat.cpu().numpy().astype(np.float32)
+    
+    path = args.results_dir + f"{sampler}/"
+    create_dir(path)
+    filename = os.path.join(path, args.experiment_name + f"_{THIS_WORKER}_{num_pred}pred_{num_corr}corr_{snr}snr" + ".npz")
     np.savez(
-            path,  
-            ground_truth = link_function(ground_truth, B, C), 
+            filename,  
+            ground_truth = link_function(ground_truth, B, C).cpu().numpy().astype(np.float32).squeeze(), 
             samples = total_samples, 
-            observation = observation, 
+            observation = observation.cpu().numpy().astype(np.float32).squeeze(), 
             reconstruction = reconstruction
         )
     
