@@ -16,11 +16,12 @@ import json
 import torch 
 from torch.func import vmap, grad
 import numpy as np
+import matplotlib.pyplot as plt
 from tqdm import tqdm
 import h5py
-
+from utils import create_dir
 from score_models import ScoreModel
-import matplotlib.pyplot as plt
+
 import sys
 sys.path.append("../models")
 
@@ -194,7 +195,7 @@ def main(args):
             
         
         
-        #hf["model"][i*batch_size: (i+1)*batch_size] = link_function(samples.cpu().numpy().astype(np.float32), B, C)
+        
 
         # Forward modeling posterior samples 
         y_hat = model(t = torch.zeros(1).to(device), 
@@ -204,7 +205,7 @@ def main(args):
         print(reconstruction.shape)
         total_samples[i * batch_size: (i+1) * batch_size] = samples.cpu().numpy().astype(np.float32)
         reconstruction[i * batch_size: (i+1) * batch_size] = y_hat.squeeze().cpu().numpy().astype(np.float32)
-        # hf["reconstruction"][i*batch_size: (i+1)*batch_size] = y_hat.cpu().numpy().astype(np.float32)
+        
     
     path = args.results_dir + f"{sampler}/"
     create_dir(path)
@@ -234,20 +235,28 @@ def main(args):
         print("Saving the experiment's parameters...")
         if "ve" in str(score_model.sde): 
             sde = "VE"
-        else: 
+        elif "vp" in str(score_model.sde): 
             sde = "VP"
+        
+        else:
+            sde = "Unknown"
+
         data = { 
+            "experiment_name": args.experiment_name, 
+            "dataset": dataset,
+            "sde": sde,
+            "sampler": sampler,
             "num_samples": num_samples,
             "num_sims": N_WORKERS,
             "model_pixels": img_size, 
-            "dataset": dataset,
-            "sde": sde, 
-            "experiment_name": args.experiment_name, 
             "sampling_params": list(sampling_params),
-            "sigma_y": sigma_y
+            "sigma_y": sigma_y  
         }
-        filename = path+ f"/{args.experiment_name}.json"
-        with open(filename, "w") as json_file: 
+        if sampler.lower() == "pc" or sampler.lower() == "old_pc": 
+            filename = f"/{args.experiment_name}_{sampler}_{num_pred}pred_{num_corr}corr_{snr:.1e}snr.json"
+
+        # Saving...
+        with open(args.results_dir + filename, "w") as json_file: 
             json.dump(data, json_file, indent = 2)
 
 
