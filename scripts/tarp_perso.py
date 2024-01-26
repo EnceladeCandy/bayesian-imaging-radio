@@ -108,10 +108,10 @@ def mean_coverage(samples, theta, references = "random", metric = "euclidean", n
     num_sims = samples.shape[1]
     num_dims = samples.shape[2]
 
-    alpha = np.empty(shape = (num_sims, num_points + 2))
-    ecp = np.empty(shape = (num_sims, num_points + 2))
+    alpha = np.empty(shape = (num_sims, num_points))
+    ecp = np.empty(shape = (num_sims, num_points))
     for i in tqdm(range(num_sims)): 
-        ecp[i, :], alpha[i, :] = get_drp_coverage(samples, theta, references = references, metric = metric, norm = norm, num_points=num_points)
+        ecp[i, :], alpha[i, :] = get_drp_coverage(samples, theta, references = references, metric = metric, norm = norm, num_points=num_points-2)
         if debug_mode == True: 
             break
     ecp_mean = ecp.mean(axis = 0)
@@ -119,7 +119,15 @@ def mean_coverage(samples, theta, references = "random", metric = "euclidean", n
     alpha_mean = alpha.mean(axis = 0)
     return ecp_mean, ecp_std, alpha_mean
 
-def bootstrapping(samples, theta, references = "random", metric = "euclidean", norm = True, debug_mode = False, num_points = 50):
+def bootstrapping(
+        samples: np.ndarray, 
+        theta: np.ndarray, 
+        references: Union[str, np.ndarray] = "random", 
+        metric: str = "euclidean", 
+        norm: bool = True, 
+        debug_mode: bool = False, 
+        num_points: int = 50
+        ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Estimates uncertainties on the expected probability and credibility values calculated with the get_drp_coverage function
     using the bootstrapping method
 
@@ -142,8 +150,8 @@ def bootstrapping(samples, theta, references = "random", metric = "euclidean", n
     num_sims = samples.shape[1]
     num_dims = samples.shape[2]
 
-    boot_alpha = np.empty(shape = (num_sims, num_points + 2))  # +2 for the [0, 1] points added 
-    boot_ecp = np.empty(shape = (num_sims, num_points + 2))
+    boot_alpha = np.empty(shape = (num_sims, num_points))  # +2 for the [0, 1] points added 
+    boot_ecp = np.empty(shape = (num_sims, num_points))
     for i in tqdm(range(num_sims)): 
         
         idx_remove = np.random.randint(num_sims)
@@ -153,7 +161,7 @@ def bootstrapping(samples, theta, references = "random", metric = "euclidean", n
         samples[:, idx_remove, :] = samples[:, idx_add, :] 
         theta[idx_remove, :] = theta[idx_add, :]
 
-        boot_ecp[i, :], boot_alpha[i, :] = get_drp_coverage(samples, theta, references = references, metric = metric, norm = norm, num_points = num_points)
+        boot_ecp[i, :], boot_alpha[i, :] = get_drp_coverage(samples, theta, references = references, metric = metric, norm = norm, num_points = num_points-2)
         if debug_mode == True: 
             break
     ecp_mean = boot_ecp.mean(axis = 0)
