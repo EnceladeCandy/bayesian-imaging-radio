@@ -1,8 +1,6 @@
 """
-Author: Noé Dia and Alexandre Adam 
-
 Objective: 
-Simulate an observation and generate posterior samples associated to a known ground-truth. 
+Simulate an observation and generate posterior samples associated to a known ground-truth (a simulation). 
 The ground-truth is sampled from a score-based model and a forward model simulates an observation 
 from a radio interferometer with isotropic gaussian noise (see https://arxiv.org/pdf/2311.18012.pdf 
 for more information on the forward model used).
@@ -23,7 +21,7 @@ from utils import create_dir
 from score_models import ScoreModel
 
 import sys
-sys.path.append("../models")
+sys.path.append("../src/inference")
 
 from forward_model import model, score_likelihood, link_function
 from posterior_sampling import euler_sampler, old_pc_sampler, pc_sampler
@@ -37,11 +35,6 @@ N_WORKERS = int(os.getenv('SLURM_ARRAY_TASK_COUNT', 1))
 # this worker's array index. Assumes slurm array job is zero-indexed
 # defaults to one if not running under SLURM
 THIS_WORKER = int(os.getenv('SLURM_ARRAY_TASK_ID', 1))
-
-
-def create_dir(dir): 
-    if not os.path.exists(dir): 
-        os.makedirs(dir)
 
 def main(args): 
     
@@ -71,8 +64,8 @@ def main(args):
 
     # Sampling parameters
     sampler = args.sampler
-    num_pred = args.num_pred
-    num_corr = args.num_corr
+    predictor = args.predictor
+    corrector = args.corrector
     snr = args.snr
     debug_mode = args.debug_mode
 
@@ -80,50 +73,9 @@ def main(args):
     batch_size = args.batch_size
     num_samples = args.num_samples
     
-    
-    # ground_truth = score_model.sample([1, 1, args.model_pixels, args.model_pixels], steps=num_pred)
-    if sampler == "euler": 
-        sampling_params = num_pred
-        ground_truth = score_model.sample([1, 1, args.model_pixels, args.model_pixels], steps=sampling_params)
-    
-    elif sampler == "old_pc": 
-        sampling_params = (num_pred, num_corr, snr)
-        ground_truth = old_pc_sampler(
-            y = None, 
-            sigma_y = None, 
-            forward_model = None, 
-            score_model = score_model,
-            score_likelihood = None, 
-            model_parameters = None, 
-            num_samples = 1, 
-            pc_params = sampling_params, 
-            img_size = (img_size, img_size), 
-            keep_chain = False, 
-            debug_mode = debug_mode
-        )
-    
-    elif sampler == "pc": 
-        sampling_params = (num_pred, num_corr, snr)
-        ground_truth = pc_sampler(
-            y = None, 
-            sigma_y = None, 
-            forward_model = None, 
-            score_model = score_model,
-            score_likelihood = None, 
-            model_parameters = None, 
-            num_samples = 1, 
-            pc_params = sampling_params, 
-            img_size = (img_size, img_size), 
-            keep_chain = False, 
-            debug_mode = debug_mode
-        )
-    else : 
-         raise ValueError("The sampler specified is not implemented or does not exist. Choose between 'euler' and 'pc'")
-    
-    
+    # Euler sampling of the ground-truth.
+    ground_truth = score_model.sample([1, 1, args.model_pixels, args.model_pixels], steps=predictor)    
     total_samples = np.empty(shape = [args.num_samples, 1, args.model_pixels, args.model_pixels], dtype = np.float32)
-    #hf.create_dataset("model", [args.num_samples, 1, args.model_pixels, args.model_pixels], dtype=np.float32)
-
     observation = model(t = torch.zeros(1).to(device), 
                         x = ground_truth[0],
                         score_model = score_model,
@@ -132,11 +84,7 @@ def main(args):
     observation += sigma_y * torch.randn_like(observation)
 
     reconstruction = np.empty(shape = [args.num_samples, observation.shape[-1]])
-    # hf.create_dataset("reconstruction", [args.num_samples, observation.shape[0]], dtype=np.float32)
-    # hf["observation"] = observation.cpu().numpy().astype(np.float32).squeeze()
-    # hf["ground_truth"] = link_function(ground_truth, B, C).cpu().numpy().astype(np.float32).squeeze()
-    
-    
+        
     for i in range(int(num_samples//batch_size)):
         if sampler.lower() == "euler":
             print("Using Euler-Maruyama sampler...")    
@@ -148,37 +96,16 @@ def main(args):
                 score_likelihood = score_likelihood, 
                 model_parameters = model_parameters,
                 num_samples = batch_size,
-                num_steps = num_pred,  
+                num_steps = predictor,  
                 img_size = (img_size, img_size),
                 keep_chain = False,
                 debug_mode = debug_mode
             )
 
-        elif sampler.lower() == "old_pc":
-            # pc_params = [(1000, 10, 1e-2), (1000, 100, 1e-2), (1000, 1000, 1e-3)]
-            # #pc_params = [(1000, 1000, 1e-3)]
-            # idx = int(THIS_WORKER//100)
-            # pred, corr, snr = pc_params[idx]
-
-            print(f"Sampling pc pred = {num_pred}, corr = {num_corr}, snr = {snr}")
-            
-            samples = old_pc_sampler(
-                y = observation,
-                sigma_y = sigma_y, 
-                forward_model = model, 
-                score_model = score_model, 
-                score_likelihood = score_likelihood, 
-                model_parameters = model_parameters,
-                num_samples = batch_size,
-                pc_params = sampling_params,
-                img_size = (img_size, img_size), 
-                keep_chain = False, 
-                debug_mode = debug_mode 
-            )
         
         elif sampler.lower() == "pc": 
-            print(f"Using pc sampler: {num_pred} predictor steps| {num_corr} corrector steps| snr = {snr}")
-            sampling_params = (num_pred, num_corr, snr)
+            print(f"Using pc sampler: {predictor} predictor steps| {corrector} corrector steps| snr = {snr}")
+            sampling_params = (predictor, corrector, snr)
             samples = pc_sampler(
                 y = observation,
                 sigma_y = sigma_y, 
@@ -194,9 +121,6 @@ def main(args):
             )
             
         
-        
-        
-
         # Forward modeling posterior samples 
         y_hat = model(t = torch.zeros(1).to(device), 
                         x = samples,
@@ -206,12 +130,17 @@ def main(args):
         total_samples[i * batch_size: (i+1) * batch_size] = samples.cpu().numpy().astype(np.float32)
         reconstruction[i * batch_size: (i+1) * batch_size] = y_hat.squeeze().cpu().numpy().astype(np.float32)
         
-    
-    path = args.results_dir + f"{sampler}/"
+    # Creating sampler directory
+    path_sampler = os.path.join(args.results_dir, sampler)
+    create_dir(path_sampler)
+
+    # Creating directory according to the pc parameter being used
+    path = os.path.join(path_sampler, f"{predictor}pred_{corrector}corr_{snr}snr")
     create_dir(path)
-    filename = os.path.join(path, args.experiment_name + f"_{THIS_WORKER}_{num_pred}pred_{num_corr}corr_{snr}snr" + ".npz")
+    filename = f"samples_sim_{THIS_WORKER}.npz"
+    
     np.savez(
-            filename,  
+            path + filename,  
             ground_truth = link_function(ground_truth, B, C).cpu().numpy().astype(np.float32).squeeze(), 
             samples = total_samples, 
             observation = observation.cpu().numpy().astype(np.float32).squeeze(), 
@@ -231,33 +160,31 @@ def main(args):
         plt.savefig("/home/noedia/scratch/bayesian_imaging_radio/tarp_samples/sanity_posterior.jpeg", bbox_inches = "tight")
     
     # Saving a json file with the script parameters 
-    if THIS_WORKER==1: 
-        print("Saving the experiment's parameters...")
-        if "ve" in str(score_model.sde): 
-            sde = "VE"
-        elif "vp" in str(score_model.sde): 
-            sde = "VP"
-        
-        else:
-            sde = "Unknown"
+    if args.save_params: 
+        if THIS_WORKER==1: 
+            print("Saving the experiment's parameters...")
+            if "ve" in str(score_model.sde): 
+                sde = "VE"
+            elif "vp" in str(score_model.sde): 
+                sde = "VP"
+            
+            else:
+                sde = "Unknown"
 
-        data = { 
-            "experiment_name": args.experiment_name, 
-            "dataset": dataset,
-            "sde": sde,
-            "sampler": sampler,
-            "num_samples": num_samples,
-            "num_sims": N_WORKERS,
-            "model_pixels": img_size, 
-            "sampling_params": list(sampling_params),
-            "sigma_y": sigma_y  
-        }
-        if sampler.lower() == "pc" or sampler.lower() == "old_pc": 
-            filename = f"/{args.experiment_name}_{sampler}_{num_pred}pred_{num_corr}corr_{snr:.1e}snr.json"
-
-        # Saving...
-        with open(args.results_dir + filename, "w") as json_file: 
-            json.dump(data, json_file, indent = 2)
+            data = { 
+                "experiment_name": args.experiment_name, 
+                "dataset": dataset,
+                "sde": sde,
+                "sampler": sampler,
+                "num_samples": num_samples,
+                "num_sims": N_WORKERS,
+                "model_pixels": img_size, 
+                "sampling_params": list(sampling_params),
+                "sigma_y": sigma_y  
+            }
+            filename = "params.json"
+            with open(args.results_dir + filename, "w") as json_file: 
+                json.dump(data, json_file, indent = 2)
 
 
 if __name__ == "__main__": 
@@ -277,13 +204,15 @@ if __name__ == "__main__":
     parser.add_argument("--sampler",            required = False,   default = "euler",  type = str,     help = "Sampler used ('old_pc' or 'euler')")
     parser.add_argument("--num_samples",        required = False,   default = 20,       type = int,     help = "Number of samples from the posterior to create")
     parser.add_argument("--batch_size",         required = False,   default = 20,       type = int)
-    parser.add_argument("--num_pred",           required = False,   default = 1000,     type = int,     help ="Number of iterations in the loop to compute the reverse sde")
-    parser.add_argument("--num_corr",           required = False,   default = 20,       type = int,     help ="Number of corrector steps for the reverse sde")
-    parser.add_argument("--snr",                required = False,   default = 1e-2,     type = float)
-    parser.add_argument("--pad",                required = False,   default = 0,        type = int)
+    parser.add_argument("--predictor",          required = False,   default = 1000,     type = int,     help = "Number of steps if sampler is 'euler'. Number of predictor steps if the sampler is 'pc'")
+    parser.add_argument("--corrector",          required = False,   default = 20,       type = int,     help = "Number of corrector steps for the reverse sde")
+    parser.add_argument("--snr",                required = False,   default = 1e-2,     type = float,   help = "Parameter pc sampling")
+    parser.add_argument("--pad",                required = False,   default = 0,        type = int,     help = "Padding (must respect the sampling function size)")
     parser.add_argument("--prior",              required = True)
-    parser.add_argument("--debug_mode",         required = False,   default = False,    type = bool)
-    parser.add_argument("--sanity_plot",        required = False,   default = False,    type = bool)
+    parser.add_argument("--debug_mode",         required = False,   default = False,    type = bool,    help = "True to skip loops and debug")
+    parser.add_argument("--sanity_plot",        required = False,   default = False,    type = bool,    help = "True to create a plot with posterior samples and the ground truth (if testing the script put both debug_mode and sanity_plot to True)")
+
+    parser.add_argument("--save_params",        required = False,   default = True,     type = bool,   help = "True in order to save the experiment's parameters in a json file.")
     
     args = parser.parse_args()
     main(args) 
