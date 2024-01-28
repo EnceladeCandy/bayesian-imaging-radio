@@ -28,15 +28,11 @@ pylab.rcParams.update(params)
 
 def main(args):
 
-    experiment_name = args.experiment_name
-    experiment_dir = args.experiment_dir
+    params_dir = args.params_dir
     results_dir = args.results_dir
-    
-    # Importing the experiment's parameters
-    json_dir = os.path.join(experiment_dir, experiment_name + ".json")
-        
+            
     # Loading the experiment's parameters
-    params = open_json(json_dir)
+    params = open_json(params_dir)
 
     dataset = params["dataset"]
     sde = params["sde"]
@@ -44,21 +40,9 @@ def main(args):
     num_sims = params["num_sims"]
     num_samples = params["num_samples"]
     img_size = params["model_pixels"]
-    sampling_params = params["sampling_params"] # Format = (Predictor, Corrector, SNR) for pc sampler | (Predictor) for euler sampler
+    sampling_params = params["sampling_params"] # Format = (Predictor, Corrector, SNR) for pc sampler | (num_steps) for euler sampler
     sigma_y = params["sigma_y"]
        
-    # Following the filename in generate_tarp_data.py
-    # if sampler.lower() == 'pc' or sampler.lower() == "old_pc": 
-    #     predictor = sampling_params[0]
-    #     corrector = sampling_params[1]
-    #     snr = sampling_params[-1]
-    #     data_dir = f"/tarp_{args.method}_{experiment_name}_{sampler}_{predictor}pred_{corrector}corr_{snr:.1e}.npz"
-
-    # elif sampler.lower() == "euler": 
-    #     num_steps = sampling_params[0]
-    #     data_dir = f"/tarp_{args.method}_{experiment_name}_{sampler}_{predictor}steps.npz"
- 
-    # data_dir = os.path.join(args.experiment_dir, f"coverage_data/{data_dir}")
     data_dir = args.data_dir
     data = np.load(data_dir)
     alpha = data["alpha"]
@@ -114,11 +98,10 @@ def main(args):
 if __name__ == "__main__":
     from argparse import ArgumentParser
     parser = ArgumentParser() 
-    parser.add_argument("--experiment_dir",       required = True)
-    parser.add_argument("--data_dir",       required = True)
-    parser.add_argument("--experiment_name",          required = True)
-    parser.add_argument("--uncertainty",             required = False,  type = float, default = 0,           help = "Size of the uncertainty zone in the plot")
-    parser.add_argument("--results_dir",             required = True,    type = str,     help = "Directory where to save the figure")
+    parser.add_argument("--params_dir",             required = True,   type = str,               help = "Directory of the json file with the experiment's parameters")
+    parser.add_argument("--data_dir",               required = True)
+    parser.add_argument("--uncertainty",            required = False,  type = float, default = 0,           help = "Size of the uncertainty zone in the plot")
+    parser.add_argument("--results_dir",            required = True,    type = str,     help = "Directory where to save the figure")
     parser.add_argument("--method",                 required = True,    type = str)
     args = parser.parse_args()
     main(args)
