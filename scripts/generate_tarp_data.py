@@ -23,12 +23,11 @@ def main(args):
 
     # Defini
     experiment_name = args.experiment_name
-    experiment_dir = args.experiment_dir
+    params_dir = args.params_dir
     results_dir = args.results_dir
     
     # Importing the experiment's parameters
-    json_dir = os.path.join(experiment_dir, experiment_name + ".json")
-    params = open_json(json_dir)
+    params = open_json(params_dir)
     dataset = params["dataset"]
     sde = params["sde"]
     sampler = params["sampler"]
@@ -123,12 +122,12 @@ def main(args):
         predictor = sampling_params[0]
         corrector = sampling_params[1]
         snr = sampling_params[-1]
-        filename = f"tarp_{args.method}_{experiment_name}_{sampler}_{predictor}pred_{corrector}corr_{snr:.1e}_{args.output_name}.npz"
+        filename = f"tarp_{args.method}_{predictor}pred_{corrector}corr_{snr:.1e}_{args.output_name}.npz"
         filedir = os.path.join(save_dir, filename)
 
     elif sampler.lower() == "euler": 
         num_steps = sampling_params[0]
-        filename = f"tarp_{args.method}_{experiment_name}_{sampler}_{predictor}steps_{args.output_name}.npz"
+        filename = f"tarp_{args.method}_{args.output_name}.npz"
         filedir = os.path.join(save_dir, filename)
 
     # Saving 
