@@ -37,7 +37,6 @@ N_WORKERS = int(os.getenv('SLURM_ARRAY_TASK_COUNT', 1))
 THIS_WORKER = int(os.getenv('SLURM_ARRAY_TASK_ID', 1))
 
 def main(args): 
-    
     print(f"Generating posterior samples for simulation {THIS_WORKER}/{N_WORKERS}")
 
     # Importing and loading the weights of the score of the prior 
@@ -84,7 +83,8 @@ def main(args):
     observation += sigma_y * torch.randn_like(observation)
 
     reconstruction = np.empty(shape = [args.num_samples, observation.shape[-1]])
-        
+    
+    # Generating posterior samples
     for i in range(int(num_samples//batch_size)):
         if sampler.lower() == "euler":
             print("Using Euler-Maruyama sampler...")    
@@ -104,7 +104,7 @@ def main(args):
 
         
         elif sampler.lower() == "pc": 
-            print(f"Using pc sampler: {predictor} predictor steps| {corrector} corrector steps| snr = {snr}")
+            print(f"Using pc sampler: {predictor} predictor steps | {corrector} corrector steps | snr = {snr}")
             sampling_params = (predictor, corrector, snr)
             samples = pc_sampler(
                 y = observation,
@@ -125,22 +125,36 @@ def main(args):
         y_hat = model(t = torch.zeros(1).to(device), 
                         x = samples,
                         score_model = score_model, 
-                        model_parameters = model_parameters)
-        print(reconstruction.shape)
+                        model_parameters = model_parameters) # (1, N_vis)
+        
         total_samples[i * batch_size: (i+1) * batch_size] = samples.cpu().numpy().astype(np.float32)
         reconstruction[i * batch_size: (i+1) * batch_size] = y_hat.squeeze().cpu().numpy().astype(np.float32)
-        
+    
+    # Creating experiment's directory
+    print("Creating folder for the experiment in the results directory...")
+    path_experiment = os.path.join(args.results_dir, args.experiment_name)
+    create_dir(path_experiment)
+    
     # Creating sampler directory
-    path_sampler = os.path.join(args.results_dir, sampler)
+    print("Creating folder for the sampler used in the experiment's directory...")
+    path_sampler = os.path.join(path_experiment, sampler)
     create_dir(path_sampler)
 
+
     # Creating directory according to the pc parameter being used
-    path = os.path.join(path_sampler, f"{predictor}pred_{corrector}corr_{snr}snr")
+    print("Creating folder for the parameters used in the sampler's directory")
+    if sampler == "pc": 
+        params_foldername = f"{predictor}pred_{corrector}corr_{snr}snr"
+    elif sampler == "euler": 
+        params_foldername = f"{predictor}steps"
+    path = os.path.join(path_sampler, params_foldername)
     create_dir(path)
-    filename = f"samples_sim_{THIS_WORKER}.npz"
+
+    
+    file_dir = os.path.join(path, f"samples_sim_{THIS_WORKER}.npz")
     
     np.savez(
-            path + filename,  
+            file_dir,  
             ground_truth = link_function(ground_truth, B, C).cpu().numpy().astype(np.float32).squeeze(), 
             samples = total_samples, 
             observation = observation.cpu().numpy().astype(np.float32).squeeze(), 
@@ -156,8 +170,9 @@ def main(args):
         im = axs[1].imshow(link_function(samples[0], B, C).squeeze().cpu(), cmap = "magma")
         plt.colorbar(im, ax = axs[1])
         axs[1].set_title("Posterior sample")
-        
-        plt.savefig("/home/noedia/scratch/bayesian_imaging_radio/tarp_samples/sanity_posterior.jpeg", bbox_inches = "tight")
+
+        image_dir = os.path.join(path_experiment, "sanity.jpeg")
+        plt.savefig(image_dir, bbox_inches = "tight")
     
     # Saving a json file with the script parameters 
     if args.save_params: 
@@ -198,12 +213,12 @@ if __name__ == "__main__":
     # Experiments spec
     parser.add_argument("--results_dir",        required = True,                                        help = "Directory where to save the TARP files")
     parser.add_argument("--experiment_name",    required = True,                                        help = "Prefix for the name of the file")
-    parser.add_argument("--model_pixels",       required = True,                        type = int)
+    parser.add_argument("--model_pixels",       required = True,                        type = int,     help = "Image size (only supporting images with equal width and heights for now). The total number of pixels in the image should be model_pixels * model_pixels")
     
     # Sampling parameters
     parser.add_argument("--sampler",            required = False,   default = "euler",  type = str,     help = "Sampler used ('old_pc' or 'euler')")
-    parser.add_argument("--num_samples",        required = False,   default = 20,       type = int,     help = "Number of samples from the posterior to create")
-    parser.add_argument("--batch_size",         required = False,   default = 20,       type = int)
+    parser.add_argument("--num_samples",        required = False,   default = 20,       type = int,     help = "Total number of posterior samples to generate.")
+    parser.add_argument("--batch_size",         required = False,   default = 20,       type = int,     help = "Number of posterior samples to generate per iteration (the code begins a loop if num_samples > batch_size).")
     parser.add_argument("--predictor",          required = False,   default = 1000,     type = int,     help = "Number of steps if sampler is 'euler'. Number of predictor steps if the sampler is 'pc'")
     parser.add_argument("--corrector",          required = False,   default = 20,       type = int,     help = "Number of corrector steps for the reverse sde")
     parser.add_argument("--snr",                required = False,   default = 1e-2,     type = float,   help = "Parameter pc sampling")
