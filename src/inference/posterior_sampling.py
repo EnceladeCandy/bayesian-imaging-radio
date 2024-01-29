@@ -10,7 +10,8 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 
 
 def complex_to_real(z):
-    """Convert a complex tensor into a real representation where the real
+    """
+    Converts a complex tensor into a real representation where the real
     part and the imaginary part are concatenated 
 
     Args:
@@ -21,22 +22,10 @@ def complex_to_real(z):
     """
     return torch.cat([z.real, z.imag], axis = -1)   
 
-# def real_to_complex(x):
-#     """Convert a real representation of a complex tensor into its associated 
-#     complex tensor (see the description of the complex_to_real(*args) function)
-
-#     Args:
-#         z (torch.Tensor): real tensor of dimension 2*D 
-
-#     Returns:
-#         complex tensor of dimensions D
-#     """
-#     H, W = x.shape
-#     D = H//2 # width of the image in its complex representation
-#     return x[:D] + 1j * x[D:]
 
 def real_to_complex(x):
-    """Convert a real representation of a complex tensor into its associated 
+    """
+    Converts a real representation of a complex tensor into its associated 
     complex tensor (see the description of the complex_to_real(*args) function)
 
     Args:
@@ -69,7 +58,6 @@ def score_posterior(t, x, y, sigma_y, forward_model, score_model, score_likeliho
     if tweedie: 
         sigma_t = sigma(t, score_model)[0].item() # During sampling every sample is evaluated at the same temperature so there's no issue with this
         mu_t = mu(t, score_model)[0].item()
-        #tweedie_x = (x + sigma(t, score_model)**2 * score_model.score(t, x))/ mu(t, score_model)
         tweedie_x = (x + sigma_t ** 2 * score_model.score(t, x)) / mu_t
     else: 
         tweedie_x = x
@@ -83,7 +71,7 @@ def euler_sampler(y, sigma_y, forward_model, score_model, score_likelihood, mode
 
     Args:
         y (array): Observation
-        sigma_y (float): std of an isotropic gaussian that we sample to perturb the observation y
+        sigma_y (float): estimated standard deviation of the gaussian noise in the observation (or ground-truth std if working with simulations)
         forward_model (function): physical model mapping a ground-truth x to a model \hat{y} 
         score_model (function): Trained score-based model playing the role of a prior 
         score_likelihood (function): see function score_likelihood 
@@ -187,8 +175,29 @@ def old_pc_sampler(y, sigma_y, forward_model, score_model, score_likelihood, mod
             return x_mean            
 
 def pc_sampler(y, sigma_y, forward_model, score_model, score_likelihood, model_parameters, num_samples, pc_params, tweedie = False, keep_chain = False, debug_mode = False, img_size = (64, 64)): 
-    pred_steps, corr_steps, snr = pc_params
+    """
+    Implementation of the predictor corrector sampler. 
+
+    Args:
+       y (array): Observation
+        sigma_y (float): estimated standard deviation of the gaussian noise in the observation (or ground-truth std if working with simulations)
+        forward_model (function): physical model mapping a ground-truth x to a model \hat{y} 
+        score_model (function): Trained score-based model (plays the role of a prior).
+        score_likelihood (function): score of the likelihood. To sample directly from the prior, put score_likelihood=None
+        model_parameters (tuple): parameters of the forward model 
+        num_samples (int): number of samples to generate
+        pc_params (Tuple): Must respect the format (predictor, corrector, snr). 
+        tweedie (bool, optional): To enable a correction of the score of the posterior with Tweedie's formula. Defaults to False.
+        keep_chain (bool, optional): To analyze possible anomalies that may occur during the sampling procedure. Defaults to False.
+        debug_mode (bool, optional): Runs the loop for 20 iterations to evaluate time required for more iterations. Defaults to False.
+        img_size (tuple, optional): image size of the ground-truth x. Defaults to (64, 64) (= simulation)
+
+    Returns:
+        _type_: _description_
+    """
+
     
+    pred_steps, corr_steps, snr = pc_params
     t = torch.ones(size = (num_samples,1)).to(device)
     sigma_max = sigma(t, score_model)[0]
     x = sigma_max * torch.randn([num_samples, 1, *img_size]).to(device)
@@ -200,15 +209,16 @@ def pc_sampler(y, sigma_y, forward_model, score_model, score_likelihood, model_p
         print("score_likelihood arg is None. Sampling directly from the learned prior.")
     with torch.no_grad(): 
         for i in tqdm(range(pred_steps-1)): 
-            # Corrector step: (Only if we are not at 0 temperature )
+            
+            # Sampling from the prior if no likelihood specified
             if score_likelihood is None:
                 gradient = score_model.score(t, x)
             else:
                 gradient =  score_posterior(t, x, y, sigma_y, forward_model, score_model, score_likelihood, model_parameters, tweedie = tweedie)
+            
+            # Corrector step: (Only if we are not at 0 temperature )
             for _ in range(corr_steps): 
                 z = torch.randn_like(x)
-                # grad_norm = torch.mean(torch.norm(gradient, dim = -1)) # mean of the norm of the score over the batch 
-                # noise_norm = torch.mean(torch.norm(z, dim = -1))
                 epsilon =  (snr * sigma(t, score_model)[0].item()) ** 2 
                 x = x + epsilon * gradient + (2 * epsilon) ** 0.5 * z 
 
