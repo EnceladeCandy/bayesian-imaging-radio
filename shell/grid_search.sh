@@ -50,6 +50,5 @@ python $SCRIPTS/inference_sim.py \
     --pad=96\
     --sampling_function=$SHARED_DATA/sampling_function3.npy \
     --prior=$SKIRT64 \
-    --debug_mode=True\
     --sanity_plot=True\
     --save_params=True
