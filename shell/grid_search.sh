@@ -2,29 +2,54 @@
 
 # SLURM parameters for every job submitted
 #SBATCH --tasks=1
+#SBATCH --array=1-2%2
 #SBATCH --cpus-per-task=1 # maximum cpu per task is 3.5 per gpus
-#SBATCH --mem=4G               # memory per node
-#SBATCH --time=00-03:00         # time (DD-HH:MM)
-#SBATCH --account=def-lplevass
-#SBATCH --job-name=<>
+#SBATCH --mem=16G               # memory per node
+#SBATCH --time=00-12:00         # time (DD-HH:MM)
+#SBATCH --account=rrg-lplevass
+#SBATCH --gres=gpu:1
+#SBATCH --job-name=gridsearch_pc_vpskirt
 #SBATCH --output=%x-%j.out
 
 # To run this part, the script must be executed directly (e.g. source script.sh or ./script.sh)
 # then the loop will run and submit multiple jobs with different hyperparameters
-
-
 if [ "$SLURM_JOB_USER" == "" ]; then
-    for SNR in 0.1 0.01; do
-        for M in 1 10; do
-            sbatch $0 $SNR $M 
+    for M in 1; do
+        for SNR in 0.1 0.01; do  # Add or modify Tdm values as needed
+            sbatch ./grid_search.sh $M $SNR
         done
     done
     exit 0
 fi
 
-M=$2
-SNR=$1
-python $HOME/projects/rrg-lplevass/noedia/bayesian_imaging_radio/tarp-diffusion/scripts/test_grid.py \
-    --predictor=4000\
+SCRIPTS=$HOME/projects/rrg-lplevass/noedia/bayesian_imaging_radio/bayesian-imaging-radio/scripts
+RESULTS_DIR=$HOME/scratch/bayesian_imaging_radio/tarp_experiment/gridsearch/post_sampling_cl
+SHARED_DATA=$HOME/projects/rrg-lplevass/data
+SKIRT64=$SHARED_DATA/score_models/ncsnpp_vp_skirt_y_64_230813225149
+PROBES64=$SHARED_DATA/score_models/ncsnpp_probes_g_64_230604024652
+
+source $HOME/diffusion/bin/activate
+NUM_SAMPLES=500
+B=250
+N=4000 # predictor steps
+M=$1
+SNR=$2
+
+# Posterior sampling
+python $SCRIPTS/inference_sim.py \
+    --sigma_y=1e-2\
+    --results_dir=$RESULTS_DIR \
+    --experiment_name=vpskirt64 \
+    --model_pixels=64\
+    --sampler=pc\
+    --num_samples=$NUM_SAMPLES\
+    --batch_size=$B\
+    --predictor=$N\
     --corrector=$M\
-    --snr=$SNR
+    --snr=$SNR\
+    --pad=96\
+    --sampling_function=$SHARED_DATA/sampling_function3.npy \
+    --prior=$SKIRT64 \
+    --debug_mode=True\
+    --sanity_plot=True\
+    --save_params=True
