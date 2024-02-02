@@ -1,14 +1,3 @@
-"""
-Objective: 
-Simulate an observation and generate posterior samples associated to a known ground-truth (a simulation). 
-The ground-truth is sampled from a score-based model and a forward model simulates an observation 
-from a radio interferometer with isotropic gaussian noise (see https://arxiv.org/pdf/2311.18012.pdf 
-for more information on the forward model used).
-
-This code creates an h5 file containing the ground truth, the associated posterior samples, the observation
-and the reconstructions obtained by forward modeling each posterior sample. 
-"""
-
 import os
 import json
 import torch 
@@ -148,6 +137,7 @@ def main(args):
     elif sampler == "euler": 
         params_foldername = f"{predictor}steps"
     path = os.path.join(path_sampler, params_foldername)
+    print(path)
     create_dir(path)
 
     
@@ -190,15 +180,16 @@ def main(args):
                 "experiment_name": args.experiment_name, 
                 "dataset": dataset,
                 "sde": sde,
+                "model_pixels": img_size,
+                "sigma_y": sigma_y,
                 "sampler": sampler,
-                "num_samples": num_samples,
-                "num_sims": N_WORKERS,
-                "model_pixels": img_size, 
-                "sampling_params": list(sampling_params),
-                "sigma_y": sigma_y  
+                "sampling_params": list(sampling_params),   
+                "num_sims": N_WORKERS,              
+                "num_samples": num_samples
             }
             filename = "params.json"
-            with open(args.results_dir + filename, "w") as json_file: 
+            params_dir = os.path.join(path, filename)
+            with open(params_dir, "w") as json_file: 
                 json.dump(data, json_file, indent = 2)
 
 
