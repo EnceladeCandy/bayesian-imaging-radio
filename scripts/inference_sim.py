@@ -137,7 +137,6 @@ def main(args):
     elif sampler == "euler": 
         params_foldername = f"{predictor}steps"
     path = os.path.join(path_sampler, params_foldername)
-    print(path)
     create_dir(path)
 
     
