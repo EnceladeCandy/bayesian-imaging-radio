@@ -2,7 +2,7 @@
 
 # SLURM parameters for every job submitted
 #SBATCH --tasks=1
-#SBATCH --array=1-2%2
+#SBATCH --array=1-500%100
 #SBATCH --cpus-per-task=1 # maximum cpu per task is 3.5 per gpus
 #SBATCH --mem=16G               # memory per node
 #SBATCH --time=00-12:00         # time (DD-HH:MM)
