@@ -20,8 +20,8 @@ python $HOME/projects/rrg-lplevass/noedia/bayesian_imaging_radio/tarp-diffusion/
     --sampler=pc\
     --num_samples=500\
     --batch_size=250\
-    --num_pred=4000\
-    --num_corr=20\
+    --predictor=4000\
+    --corrector=20\
     --snr=1e-1\
     --pad=96\
     --sampling_function=$HOME/projects/rrg-lplevass/data/sampling_function3.npy \
