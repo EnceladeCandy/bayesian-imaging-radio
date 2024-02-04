@@ -8,7 +8,7 @@
 #SBATCH --time=00-12:00         # time (DD-HH:MM)
 #SBATCH --account=rrg-lplevass
 #SBATCH --gres=gpu:1
-#SBATCH --job-name=gridsearch_pc_vpskirt
+#SBATCH --job-name=gridsearch_pc_veprobes
 #SBATCH --output=%x-%j.out
 
 # To run this part, the script must be executed directly (e.g. source script.sh or ./script.sh)
