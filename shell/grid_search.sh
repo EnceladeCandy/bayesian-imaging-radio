@@ -39,7 +39,7 @@ SNR=$2
 python $SCRIPTS/inference_sim.py \
     --sigma_y=1e-2\
     --results_dir=$RESULTS_DIR \
-    --experiment_name=vpskirt64 \
+    --experiment_name=veprobes64 \
     --model_pixels=64\
     --sampler=pc\
     --num_samples=$NUM_SAMPLES\
@@ -49,6 +49,5 @@ python $SCRIPTS/inference_sim.py \
     --snr=$SNR\
     --pad=96\
     --sampling_function=$SHARED_DATA/sampling_function3.npy \
-    --prior=$SKIRT64 \
-    --sanity_plot=True\
+    --prior=$PROBES64 \
     --save_params=True
