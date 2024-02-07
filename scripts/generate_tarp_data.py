@@ -40,7 +40,7 @@ def main(args):
 
     # Loading the paths for each posterior (1 path = 1 simulation = 1 observation = 1 posterior sampled num_samples times)
     pattern = experiment_name + "*.npz"
-    data_dir = os.path.join(experiment_dir, sampler, pattern)
+    data_dir = os.path.join(args.experiment_dir, sampler, pattern)
     print(data_dir)
     paths = glob(data_dir)
     assert len(paths)>0, "The indicated samples directory does not include any file respecting the experiment name specified."
@@ -51,18 +51,39 @@ def main(args):
     
     print("Importing the samples and the ground-truths...")
     idx_corrupted_files = []
-    for i, path in tqdm(enumerate(paths)):
-        try:
-            # Loading the samples and the ground-truth 
-            data = np.load(path)
-            samples[:, i, :] = data["samples"].reshape(-1, img_size ** 2)
-            theta[i, :] = data["ground_truth"].reshape(-1, img_size ** 2)
 
-        # To handle bugs that may occur during the array job. 
-        except OSError:
-            idx_corrupted_files.append(i)
-        if args.debug_mode: 
-            break
+    if args.mode == "posterior": 
+        for i, path in tqdm(enumerate(paths)):
+            try:
+                # Loading the samples and the ground-truth 
+                data = np.load(path)
+                samples[:, i, :] = data["samples"].reshape(-1, img_size ** 2)
+                theta[i, :] = data["ground_truth"].reshape(-1, img_size ** 2)
+
+            # To handle bugs that may occur during the array job. 
+            except OSError:
+                idx_corrupted_files.append(i)
+            if args.debug_mode: 
+                break
+
+    elif args.mode == "prior": 
+        for i, path in tqdm(enumerate(paths)):
+            try:
+                # Loading the samples and the ground-truth 
+                data = np.load(path)
+                samples[:, i, :] = data["samples"].reshape(-1, img_size ** 2)
+                theta[i, :] = data["ground_truth"].reshape(-1, img_size ** 2)
+
+            # To handle bugs that may occur during the array job. 
+            except OSError:
+                idx_corrupted_files.append(i)
+            if args.debug_mode: 
+                break
+    
+    else: 
+        raise ValueError("mode argument must be either 'posterior' or 'prior'.")
+    
+
 
     # Print a message if corrupted files are detected
     if len(idx_corrupted_files) != 0: 
