@@ -4,8 +4,8 @@
 #SBATCH --tasks=1
 #SBATCH --array=1-500%100
 #SBATCH --cpus-per-task=1 # maximum cpu per task is 3.5 per gpus
-#SBATCH --mem=16G               # memory per node
-#SBATCH --time=00-12:00         # time (DD-HH:MM)
+#SBATCH --mem=40G               # memory per node
+#SBATCH --time=00-03:00         # time (DD-HH:MM)
 #SBATCH --account=rrg-lplevass
 #SBATCH --gres=gpu:1
 #SBATCH --job-name=gridsearch_pc_veprobes
@@ -26,11 +26,11 @@ SCRIPTS=$HOME/projects/rrg-lplevass/noedia/bayesian_imaging_radio/bayesian-imagi
 RESULTS_DIR=$HOME/scratch/bayesian_imaging_radio/tarp_experiment/gridsearch/post_sampling_cl
 SHARED_DATA=$HOME/projects/rrg-lplevass/data
 SKIRT64=$SHARED_DATA/score_models/ncsnpp_vp_skirt_y_64_230813225149
-PROBES64=$SHARED_DATA/score_models/ncsnpp_probes_g_64_230604024652
+PROBES64=$SHARED_DATA/ncsnpp_probes_g_64_230604024652
 
-source $HOME/diffusion/bin/activate
+source $HOME/gingakei/bin/activate
 NUM_SAMPLES=500
-B=250
+B=500
 N=4000 # predictor steps
 M=$1
 SNR=$2
