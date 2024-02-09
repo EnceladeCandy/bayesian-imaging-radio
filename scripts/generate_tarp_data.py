@@ -30,12 +30,13 @@ scratch
                 -vpskirt64
 """
 
+
 def main(args):
     if args.grid == True: 
         predictor = args.predictor
         corrector = args.corrector 
         snr = args.snr
-        experiment_dir = os.path.join(args.experiment_dir, f"{predictor}pred_{corrector}corr_{corrector}_{snr}snr")
+        experiment_dir = os.path.join(args.experiment_dir, f"{predictor}pred_{corrector}corr_{snr}snr")
 
     else: 
         experiment_dir = args.experiment_dir
@@ -54,8 +55,8 @@ def main(args):
         sampling_params = params["sampling_params"] # Format = (Predictor, Corrector, SNR) for pc sampler | (Predictor) for euler sampler
 
         # Loading the paths for each posterior (1 path = 1 simulation = 1 observation = 1 posterior sampled num_samples times)
-        pattern = "samples_sim*.npz"
-        data_dir = os.path.join(experiment_dir, sampler, pattern)
+        pattern = "samples_sim_*.npz"
+        data_dir = os.path.join(experiment_dir, pattern)
         print(data_dir)
         paths = glob(data_dir)
         assert len(paths)>0, "The indicated samples directory does not include any file respecting the experiment name specified."
@@ -128,11 +129,8 @@ def main(args):
             axs[i].axis("off")
 
         # Creating directory + saving sanity plot
-        save_dir = os.path.join(args.results_dir, "sanity_check")
-        create_dir(save_dir)
-        file_name = f"{sampler}_{experiment_name}.jpeg"
-        file_dir = os.path.join(save_dir, file_name)
-        plt.savefig("test.jpeg", bbox_inches="tight", pad_inches=0.2)
+        save_dir = os.path.join(args.results_dir, "sanity_check.jpeg")
+        plt.savefig(save_dir, bbox_inches="tight", pad_inches=0.2)
     
     
 
@@ -181,6 +179,11 @@ if __name__ == '__main__':
     from argparse import ArgumentParser
     parser = ArgumentParser()
 
+    # Modes (changes how the script is going to run)
+    parser.add_argument("--mode",               required = True,   type = str,                          help = "Running mode for the script. Either 'posterior' or 'prior'. If 'posterior'/'prior' the script will run expecting to receive posterior/prior samples to run the tarp test.")
+    parser.add_argument("--grid",               required = False,  type = bool,  default = False,       help = "To combine with the mode argument if you want to run multiple TARP tests at once. You then need to specify predictor, corrector and snr.")
+    
+
     # Input data directory (= directory where the output of inference_sim.py has been saved)
     parser.add_argument("--experiment_dir",        required = True,   type = str,                          help = "Directory of the posterior samples")
 
@@ -194,15 +197,12 @@ if __name__ == '__main__':
     parser.add_argument("--num_points",         required = False,  type = int,   default = 50,          help = "Number of points in the coverage figure")
     
     # Experiment name
-    parser.add_argument("--experiment_name",    required = True,   type = str,                          help = "Should be the same parameter as the one used in inference_sim.py to generate the posterior samples")
+    # parser.add_argument("--experiment_name",    required = True,   type = str,                          help = "Should be the same parameter as the one used in inference_sim.py to generate the posterior samples")
 
     # Output directory for the results
     parser.add_argument("--results_dir",        required = True,   type = str,                          help = "Directory where a .npz file containing the results of the TARP test will be saved. A folder 'coverage_data' will be automatically created in this directory")
     #parser.add_argument("--output_name",        required = True,   type = str,                          help = "Suffix to add at the end of the file name for the coverage data")
     
-    # Code modes
-    parser.add_argument("--mode",               required = True,   type = str,                          help = "Running mode for the script. Either 'posterior' or 'prior'. If 'posterior'/'prior' the script will run expecting to receive posterior/prior samples to run the tarp test.")
-    parser.add_argument("--grid",               required = False,  type = bool,  default = False,       help = "To combine with the mode argument if you want to run multiple TARP tests at once")
     
     # Debug mode and Sanity plot
     parser.add_argument("--debug_mode",         required = False,  type = bool,  default = False,       help = "Activate debug mode (leave empty to run without debug_mode)")

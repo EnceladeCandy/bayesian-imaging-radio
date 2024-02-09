@@ -129,7 +129,7 @@ def bootstrapping(
         num_points: int = 50
         ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Estimates uncertainties on the expected probability and credibility values calculated with the get_drp_coverage function
-    using the bootstrapping method
+    using a simple implementation of the bootstrapping method
 
     Args:
         samples: the samples to compute the coverage of, with shape ``(n_samples, n_sims, n_dims)``.
@@ -162,7 +162,7 @@ def bootstrapping(
         theta[idx_remove, :] = theta[idx_add, :]
 
         boot_ecp[i, :], boot_alpha[i, :] = get_drp_coverage(samples, theta, references = references, metric = metric, norm = norm, num_points = num_points-2)
-        if debug_mode == True: 
+        if debug_mode == True and i==10: 
             break
     ecp_mean = boot_ecp.mean(axis = 0)
     ecp_std = boot_ecp.std(axis = 0)

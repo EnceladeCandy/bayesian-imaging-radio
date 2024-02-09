@@ -2,13 +2,11 @@
 
 # SLURM parameters for every job submitted
 #SBATCH --tasks=1
-#SBATCH --array=1-500%100
 #SBATCH --cpus-per-task=1 # maximum cpu per task is 3.5 per gpus
 #SBATCH --mem=40G               # memory per node
 #SBATCH --time=00-03:00         # time (DD-HH:MM)
-#SBATCH --account=rrg-lplevass
-#SBATCH --gres=gpu:1
-#SBATCH --job-name=gridsearch_pc_veprobes
+#SBATCH --account=def-lplevass
+#SBATCH --job-name=coverage_data_gen
 #SBATCH --output=%x-%j.out
 
 # To run this part, the script must be executed directly (e.g. source script.sh or ./script.sh)
@@ -27,17 +25,19 @@ source $HOME/gingakei/bin/activate
 M=$1
 SNR=$2
 
+RESULTS_DIR=/home/noedia/scratch/bayesian_imaging_radio/tarp_experiment/gridsearch/post_sampling_cl/vpskirt64
+
 # Posterior sampling
-python $HOME/projects/rrg-lplevass/noedia/bayesian_imaging_radio/tarp-diffusion/scripts/view_tarp.py \
-    --method=bootstrapping\
-    --uncertainty=3\
-    --experiment_name=vpskirt64 \
-    --grid=true\
+python generate_tarp_data.py \
+    --mode=posterior\
+    --grid=True\
+    --predictor=4000\
     --corrector=$M\
     --snr=$SNR\
-    --output_name=""\
-    --img_size=64\
-    --num_samples=600\
-    --samples_dir=/home/noedia/scratch/bayesian_imaging_radio/tarp_samples/euler/ \
-    --results_dir=/home/noedia/scratch/bayesian_imaging_radio/tarp_samples/ \
+    --experiment_dir=$RESULTS_DIR/pc\
+    --method=bootstrapping\
     --num_points=50\
+    --results_dir=$RESULTS_DIR\
+    --sanity_plot=True
+    
+
