@@ -21,14 +21,15 @@ if [ "$SLURM_JOB_USER" == "" ]; then
 fi
 
 
-source $HOME/diffusion/bin/activate
+source $HOME/gingakei/bin/activate
 M=$1
 SNR=$2
 
 RESULTS_DIR=/home/noedia/scratch/bayesian_imaging_radio/tarp_experiment/gridsearch/post_sampling_cl/vpskirt64
+SCRIPTS_DIR=/home/noedia/projects/rrg-lplevass/noedia/bayesian_imaging_radio/bayesian-imaging-radio/scripts
 
 # Posterior sampling
-python generate_tarp_data.py \
+python $SCRIPTS_DIR/generate_tarp_data.py \
     --mode=posterior\
     --grid=True\
     --predictor=4000\
