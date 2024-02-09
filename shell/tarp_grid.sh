@@ -21,7 +21,7 @@ if [ "$SLURM_JOB_USER" == "" ]; then
 fi
 
 
-source $HOME/gingakei/bin/activate
+source $HOME/diffusion/bin/activate
 M=$1
 SNR=$2
 
