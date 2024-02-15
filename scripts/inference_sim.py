@@ -116,7 +116,7 @@ def main(args):
                         score_model = score_model, 
                         model_parameters = model_parameters) # (1, N_vis)
         
-        total_samples[i * batch_size: (i+1) * batch_size] = samples.cpu().numpy().astype(np.float32)
+        total_samples[i * batch_size: (i+1) * batch_size] = link_function(samples, B, C).cpu().numpy().astype(np.float32)
         reconstruction[i * batch_size: (i+1) * batch_size] = y_hat.squeeze().cpu().numpy().astype(np.float32)
     
     # Creating experiment's directory
@@ -156,7 +156,7 @@ def main(args):
         im = axs[0].imshow(link_function(ground_truth[0], B, C).squeeze().cpu(), cmap = "magma")
         plt.colorbar(im, ax = axs[0])
         axs[0].set_title("Ground-truth")
-        im = axs[1].imshow(link_function(samples[0], B, C).squeeze().cpu(), cmap = "magma")
+        im = axs[1].imshow(samples[0].squeeze().cpu(), cmap = "magma")
         plt.colorbar(im, ax = axs[1])
         axs[1].set_title("Posterior sample")
 
