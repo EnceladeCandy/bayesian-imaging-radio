@@ -2,7 +2,7 @@
 
 # SLURM parameters for every job submitted
 #SBATCH --tasks=1
-#SBATCH --array=1-25%25
+#SBATCH --array=25-250%250
 #SBATCH --cpus-per-task=1 # maximum cpu per task is 3.5 per gpus
 #SBATCH --mem=40G               # memory per node
 #SBATCH --time=00-03:00         # time (DD-HH:MM)
@@ -23,7 +23,8 @@ PROBES64=$SHARED_DATA/ncsnpp_probes_g_64_230604024652
 
 source $HOME/gingakei/bin/activate
 NUM_SAMPLES=1000
-B=500 # batch size
+# B=500 # batch size PROBES
+B=1000 # batch size SKIRT
 N=4000 # predictor steps
 
 
