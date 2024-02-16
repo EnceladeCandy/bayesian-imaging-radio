@@ -81,7 +81,27 @@ def main(args):
         image_dir = os.path.join(path_experiment, "sanity.jpeg")
         plt.savefig(image_dir, bbox_inches = "tight")
     
-   
+    # Saving a json file with the script parameters 
+    if args.save_params: 
+        if THIS_WORKER==1: 
+            print("Saving the experiment's parameters...")
+            if "ve" in str(score_model.sde): 
+                sde = "VE"
+            elif "vp" in str(score_model.sde): 
+                sde = "VP"
+            
+            else:
+                sde = "Unknown"
+
+            data = { 
+                "num_samples": num_samples,
+                "model_pixels": img_size, 
+                "num_steps": predictor
+            }
+            filename = "params.json"
+            params_dir = os.path.join(path, filename)
+            with open(params_dir, "w") as json_file: 
+                json.dump(data, json_file, indent = 2)
 
 
 if __name__ == "__main__": 
@@ -100,7 +120,7 @@ if __name__ == "__main__":
     parser.add_argument("--prior",              required = True)
     parser.add_argument("--debug_mode",         required = False,   default = False,    type = bool,    help = "True to skip loops and debug")
     parser.add_argument("--sanity_plot",        required = False,   default = False,    type = bool,    help = "True to create a plot with posterior samples and the ground truth (if testing the script put both debug_mode and sanity_plot to True)")
-
+    parser.add_argument("--save_params",        required = False,   default =False)
     args = parser.parse_args()
     main(args) 
 

@@ -1,11 +1,15 @@
 import os
+import sys
 import matplotlib.pyplot as plt
 import numpy as np 
 from glob import glob
 import json
 from tqdm import tqdm
+sys.path.append("../src/data_analysis")
+sys.path.append("../src/inference")
 from tarp_perso import bootstrapping, get_drp_coverage, mean_coverage
 from utils import create_dir, load_json
+from forward_model import link_function
 
 
 
@@ -17,19 +21,6 @@ N_WORKERS = int(os.getenv('SLURM_ARRAY_TASK_COUNT', 1))
 # defaults to one if not running under SLURM
 THIS_WORKER = int(os.getenv('SLURM_ARRAY_TASK_ID', 1))
 
-"""
-File format: 
-scratch
-    -tarp_experiment
-        -gridsearch
-            -post_sampling_cl
-                -veprobes64
-                    -4000pred_1corr_0.1snr
-                    -4000pred_1corr_0.01snr
-
-                -vpskirt64
-"""
-
 
 def main(args):
     if args.grid == True: 
@@ -37,27 +28,35 @@ def main(args):
         corrector = args.corrector 
         snr = args.snr
         experiment_dir = os.path.join(args.experiment_dir, f"{predictor}pred_{corrector}corr_{snr}snr")
+        sampling_params = np.array([predictor, corrector, snr])
 
     else: 
         experiment_dir = args.experiment_dir
 
 
     if args.mode == "posterior": 
+        
+        # Importing the experiment's parameters 
         params_dir = os.path.join(experiment_dir, "params.json")
-    
-        # Importing the experiment's parameters (a bit useless but thought it was more straightforward than specifying at the end of the file)
         params = load_json(params_dir)
         experiment_name = params["experiment_name"]
         sampler = params["sampler"]
         num_sims = params["num_sims"]
         num_samples = params["num_samples"]
         img_size = params["model_pixels"]
-        sampling_params = params["sampling_params"] # Format = (Predictor, Corrector, SNR) for pc sampler | (Predictor) for euler sampler
+        sampling_params = np.array(params["sampling_params"]) # Format = (Predictor, Corrector, SNR) for pc sampler | (Predictor) for euler sampler
+
+        # TO REMOVE ONCE THE DATASET IS FIXED
+        if params["dataset"] == "probes": 
+            B, C = 1/2, 1/2
+        elif params["dataset"] == "skirt": 
+            B, C = 1, 0
+        else:
+            raise ValueError("The dataset in the json's file does not match any dataset where the score model has been trained.")
 
         # Loading the paths for each posterior (1 path = 1 simulation = 1 observation = 1 posterior sampled num_samples times)
         pattern = "samples_sim_*.npz"
         data_dir = os.path.join(experiment_dir, pattern)
-        print(data_dir)
         paths = glob(data_dir)
         assert len(paths)>0, "The indicated samples directory does not include any file respecting the experiment name specified."
 
@@ -71,10 +70,10 @@ def main(args):
             try:
                 # Loading the samples and the ground-truth 
                 data = np.load(path)
-                samples[:, i, :] = data["samples"].reshape(-1, img_size ** 2)
+                samples[:, i, :] = link_function(data["samples"], B, C).reshape(-1, img_size ** 2)
                 theta[i, :] = data["ground_truth"].reshape(-1, img_size ** 2)
 
-            # To handle bugs that may occur during the array job. 
+            # To handle corrupted files 
             except OSError:
                 idx_corrupted_files.append(i)
             
@@ -83,28 +82,45 @@ def main(args):
                 break
 
     elif args.mode == "prior": 
-        pattern = "prior_samples*"
-        data_dir = os.path.join(args.experiment_dir, sampler, pattern)
-        samples = np.empty(shape = (num_sims, num_samples))
+        assert args.num_samples != 0, "It is required to specify the number of prior samples wanted as 'posterior samples' for the tarp test."
+        
+        params_dir = os.path.join(experiment_dir, "params.json")
+        params = load_json(params_dir)
+        img_size = params["model_pixels"]
+        num_samples_per_file = params["num_samples"]
+        num_samples = args.num_samples
+        pattern = "prior_samples_*.npy"
+        
+        data_dir = os.path.join(experiment_dir, pattern)
+        paths = glob(data_dir)
+        assert len(paths)>0, "The indicated samples directory does not include any file respecting the experiment name specified."
+
+        tot_num_samples = len(paths) * num_samples_per_file
+
+         
+             # 1000
+        # Now we would like to split the data so that we have 1 simulation with exactly num_samples samples (instead of num_samples_per_file samples). 
+        samples = np.empty(shape = (num_sims, num_samples, img_size ** 2))
+        theta = np.empty(shape = (num_sims, num_samples))
+
         for i, path in tqdm(enumerate(paths)):
             try:
                 # Loading the samples and the ground-truth 
                 data = np.load(path)
-                samples[:, i, :] = data["samples"].reshape(-1, img_size ** 2)
-                theta[i, :] = data["ground_truth"].reshape(-1, img_size ** 2)
+                for j in range(int(num_samples//num_samples_per_file)):
+                    samples[:, i, :] = data["samples"][j * num_samples: (j + 1) * num_samples].reshape(-1, img_size ** 2)
+                    theta[i, :] = data["ground_truth"][j * num_samples: (j + 1) * num_samples].reshape(-1, img_size ** 2)
 
-            # To handle bugs that may occur during the array job. 
+            # To handle corrupted 
             except OSError:
                 idx_corrupted_files.append(i)
 
-            if args.debug_mode: 
+            if args.debug_mode and i == 20: 
                 break
     
     else: 
         raise ValueError("mode argument must be either 'posterior' or 'prior'.")
     
-
-
     # Print a message if corrupted files are detected
     if len(idx_corrupted_files) > 0: 
         print(f"Detected {len(idx_corrupted_files)} corrupted file(s):")
@@ -115,11 +131,9 @@ def main(args):
         samples = np.delete(samples, idx_corrupted_files, axis = 1)
         theta = np.delete(theta, idx_corrupted_files, axis = 0)
 
-
     # Plotting posterior samples from a randomly selected simulation
     if args.sanity_plot:  
         fig, axs = plt.subplots(1, 5, figsize = (5*3.5, 3.5))
-        
         
         im = axs[0].imshow(theta[0].reshape(img_size, img_size), cmap = "magma")
         plt.colorbar(im, fraction = 0.046, ax = axs[0])
@@ -172,7 +186,8 @@ def main(args):
     np.savez(filedir,
              ecp = ecp, 
              ecp_std = ecp_std, 
-             alpha = alpha)
+             alpha = alpha,
+             sampling_params = sampling_params)
     
 
 if __name__ == '__main__':
@@ -182,27 +197,24 @@ if __name__ == '__main__':
     # Modes (changes how the script is going to run)
     parser.add_argument("--mode",               required = True,   type = str,                          help = "Running mode for the script. Either 'posterior' or 'prior'. If 'posterior'/'prior' the script will run expecting to receive posterior/prior samples to run the tarp test.")
     parser.add_argument("--grid",               required = False,  type = bool,  default = False,       help = "To combine with the mode argument if you want to run multiple TARP tests at once. You then need to specify predictor, corrector and snr.")
-    
 
     # Input data directory (= directory where the output of inference_sim.py has been saved)
-    parser.add_argument("--experiment_dir",        required = True,   type = str,                          help = "Directory of the posterior samples")
+    parser.add_argument("--experiment_dir",     required = True,   type = str,                          help = "Directory of the posterior samples")
 
-    # PC parameters: 
+    # PC parameters, if mode = 'posterior' AND grid = True: 
     parser.add_argument("--predictor",          required = False,   default = 1000,     type = int,     help = "Number of steps if sampler is 'euler'. Number of predictor steps if the sampler is 'pc'")
     parser.add_argument("--corrector",          required = False,   default = 20,       type = int,     help = "Number of corrector steps for the reverse sde")
     parser.add_argument("--snr",                required = False,   default = 1e-2,     type = float,   help = "Parameter pc sampling")
+
+    # If mode = "prior", 
+    parser.add_argument("--num_samples",        required = False,   default = None,     type = int,     help = "Number of prior samples per file.")
 
     # Coverage method and parameters
     parser.add_argument("--method",             required = False,  type = str,   default = False,       help = "Method to use for the TARP figure ('bootstrapping', 'default', 'mean_coverage')")
     parser.add_argument("--num_points",         required = False,  type = int,   default = 50,          help = "Number of points in the coverage figure")
     
-    # Experiment name
-    # parser.add_argument("--experiment_name",    required = True,   type = str,                          help = "Should be the same parameter as the one used in inference_sim.py to generate the posterior samples")
-
     # Output directory for the results
     parser.add_argument("--results_dir",        required = True,   type = str,                          help = "Directory where a .npz file containing the results of the TARP test will be saved. A folder 'coverage_data' will be automatically created in this directory")
-    #parser.add_argument("--output_name",        required = True,   type = str,                          help = "Suffix to add at the end of the file name for the coverage data")
-    
     
     # Debug mode and Sanity plot
     parser.add_argument("--debug_mode",         required = False,  type = bool,  default = False,       help = "Activate debug mode (leave empty to run without debug_mode)")
