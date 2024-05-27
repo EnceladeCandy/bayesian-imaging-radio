@@ -6,7 +6,7 @@
 #SBATCH --mem=40G               # memory per node
 #SBATCH --time=00-03:00         # time (DD-HH:MM)
 #SBATCH --account=def-lplevass
-#SBATCH --job-name=chi_samples_probes
+#SBATCH --job-name=chi_samples_skirt
 #SBATCH --output=%x-%j.out
 
 # To run this part, the script must be executed directly (e.g. source script.sh or ./script.sh)
@@ -21,7 +21,7 @@ if [ "$SLURM_JOB_USER" == "" ]; then
 fi
 
 
-source $HOME/gingakei/bin/activate
+source $HOME/diffusion/bin/activate
 M=$1
 SNR=$2
 
@@ -35,5 +35,5 @@ python $SCRIPTS_DIR/generate_chi_squared.py \
     --predictor=4000\
     --corrector=$M\
     --snr=$SNR\
-    --experiment_dir=$RESULTS_DIR_PROBES/pc\
-    --results_dir=$RESULTS_DIR_PROBES\
+    --experiment_dir=$RESULTS_DIR_SKIRT/pc\
+    --results_dir=$RESULTS_DIR_SKIRT\
