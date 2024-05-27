@@ -1,6 +1,8 @@
 import torch 
 import numpy as np
 from torch.func import vmap, grad
+import sys 
+sys.path.append("../inference")
 from posterior_sampling import sigma, mu, complex_to_real
 
 
@@ -35,6 +37,12 @@ def ift(x):
     if type(x) == torch.Tensor: 
         return torch.fft.ifft2(x, norm = "ortho")
     
+def ftshift(x):
+    """
+    Fftshift the DC component of the input. 
+    Note: For even length inputs, fftshift and iftshift are equivalent. 
+    """
+    return torch.fft.fftshift(x)
 
 def link_function(x, B, C): 
     """Mapping from the model space (where the score model is trained) to the image space 
@@ -50,7 +58,7 @@ def link_function(x, B, C):
     """
     return B*x + C
 
-def noise_padding(x, pad, sigma):
+def noise_padding_dev(x, pad, sigma):
     """Padding with realizations of noise of the same temperature of the current diffusion step
 
     Args:
@@ -77,7 +85,18 @@ def noise_padding(x, pad, sigma):
     out = out + z * mask
     return out
 
-def model(t, x, score_model, model_parameters): 
+def noise_padding(x, pad, sigma):
+    H, W = x.shape
+    out = torch.nn.functional.pad(x, (pad, pad, pad, pad)) 
+    # Create a mask for padding region
+    mask = torch.ones_like(out)
+    mask[pad:pad + H, pad:pad+W] = 0.
+    # Noise pad around the model
+    z = torch.randn_like(out) * sigma
+    out = out + z * mask
+    return out
+
+def old_model(t, x, score_model, model_parameters): 
     """Apply a physical model A to a ground-truth x.
 
     Args:
@@ -110,10 +129,59 @@ def model(t, x, score_model, model_parameters):
     y_hat = complex_to_real(vis_sampled)
     return y_hat
 
+def model(t, x, score_model, model_parameters): 
+    """Apply a physical model A to a ground-truth x.
+
+    Args:
+        t (torch.Tensor): temperature in the sampling procedure of diffusion models.
+        x (torch.Tensor): ground-truth 
+        score_model (torch.Tensor): trained score-based model (= the score of a prior)
+        model_parameters (Tuple): list of parameters for the model (sampling_function, B, C)
+          - index 0: sampling function (mask selecting the measured visibilities in Fourier space, must have a shape (H, W) where H and W are the height
+            and width of the padded image respectively)
+          - index 1 and index 2: B and C, the link_function parameters (see function link_function)
+
+    Returns:
+        y_hat (torch.Tensor): 
+    """
+
+    sampling_function, B, C, pad= model_parameters
+
+    # TODO: ADD OPTION FOR BATCHED INPUT (in order to forward model multiple    
+    x_padded = noise_padding(x.squeeze(), pad = pad, sigma = sigma(t, score_model))
+    x_padded = link_function(x_padded, B=B, C=C)
+    vis_sampled = ft(ftshift(x_padded)).squeeze()[sampling_function] # some troublesome bug makes the squeeze needed here
+    y_hat = complex_to_real(vis_sampled)
+    return y_hat
+
+def log_likelihood(t, x, y, sigma_y, forward_model, score_model, model_parameters):
+    """
+    Calculate the log-likelihood of a gaussian distribution 
+    Arguments: 
+        y = processed gridded visibilities (real part and imaginary part concatenated)
+        x = sky brightness 
+        t = diffusion temperature
+        A = linear model (sampling function and FT)  
+    
+    Returns: 
+        log-likelihood of a gaussian distribution
+    """ 
+    y_hat = forward_model(t, x, score_model, model_parameters)
+    Gamma_diag = torch.ones_like(y, device = y.device)/2
+    Gamma_diag[0] = 1 
+
+    var = sigma(t, score_model) **2 * Gamma_diag + mu(t, score_model)**2 * sigma_y**2 ## sigma(t) ** 2 * AA^T + sigma_y ** 2
+    res = (mu(t, score_model) * y - y_hat) ** 2 / var
+    log_prob = -0.5 * torch.sum(res)
+    return log_prob
+
+def score_likelihood(t, x, y, sigma_y, forward_model, score_model, model_parameters):
+    return vmap(grad(lambda x, t: log_likelihood(t, x, y, sigma_y, forward_model, score_model, model_parameters)), randomness = "different")(x, t)
+
 def model_to_plot(t, x, score_model, model_parameters):
     """
     Same function as model(*args) except that the sampling function is replaced by an integer matrix where each pixel can either take
-    the value 0 or 1. This 
+    the value 0 or 1. This function is only meant for visualization. 
     Args:
         t (_type_): _description_
         x (_type_): _description_
@@ -130,7 +198,10 @@ def model_to_plot(t, x, score_model, model_parameters):
     return torch.cat([vis_sampled.real, vis_sampled.imag])
 
 
-def log_likelihood(t, x, y, sigma_y, forward_model, score_model, model_parameters):
+
+
+
+def old_log_likelihood(t, x, y, sigma_y, forward_model, score_model, model_parameters):
     """
     Compute the log-likelihood following the convolved likelihood approximation 
     (see Appendix A of https://arxiv.org/abs/2311.18012)
@@ -161,7 +232,7 @@ def log_likelihood(t, x, y, sigma_y, forward_model, score_model, model_parameter
     log_prob = - 0.5 * torch.sum(diff)
     return log_prob
 
-def score_likelihood(t, x, y, sigma_y, forward_model, score_model, model_parameters): 
+def old_score_likelihood(t, x, y, sigma_y, forward_model, score_model, model_parameters): 
     """
     Computes the score of the likelihood
     See log_likelihood(*args) for a description of the arguments 
