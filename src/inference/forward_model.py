@@ -1,9 +1,3 @@
-"""
-Author: Noé Dia
-
-This code defines the forward model for the radio interferometric imaging task.
-"""
-
 import torch 
 import numpy as np
 from torch.func import vmap, grad
@@ -155,7 +149,7 @@ def log_likelihood(t, x, y, sigma_y, forward_model, score_model, model_parameter
     """
 
     # Model prediction
-    y_hat = forward_model(t, x, score_model, model_parameters) # model prediction
+    y_hat = forward_model(t, x, score_model, model_parameters) 
     
     # Variance computed analytically with the convolved likelihood approximation
     var = sigma(t, score_model) ** 2/2 + mu(t, score_model)**2 * sigma_y ** 2
@@ -163,14 +157,13 @@ def log_likelihood(t, x, y, sigma_y, forward_model, score_model, model_parameter
     diff = (y_hat - mu(t, score_model) * y)**2 / var
     diff[0] = (y_hat[0] - mu(t, score_model) * y[0])**2 / var_0 
     
-
     # Log probability
     log_prob = - 0.5 * torch.sum(diff)
     return log_prob
 
 def score_likelihood(t, x, y, sigma_y, forward_model, score_model, model_parameters): 
     """
-    Compute the score of the likelihood
+    Computes the score of the likelihood
     See log_likelihood(*args) for a description of the arguments 
     """ 
     return vmap(grad(lambda x, t: log_likelihood(t, x, y, sigma_y, forward_model, score_model, model_parameters)), randomness = "different")(x, t) # Do not interchange x and t

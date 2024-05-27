@@ -36,4 +36,8 @@ python $SCRIPTS_DIR/generate_chi_squared.py \
     --corrector=$M\
     --snr=$SNR\
     --experiment_dir=$RESULTS_DIR_SKIRT/pc\
+<<<<<<< HEAD
     --results_dir=$RESULTS_DIR_SKIRT\
+=======
+    --results_dir=$RESULTS_DIR_SKIRT\
+>>>>>>> 70b1ef05644cb6a54193a5364fe5f23b1649369a

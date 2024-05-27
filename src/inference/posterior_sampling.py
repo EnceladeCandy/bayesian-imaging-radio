@@ -11,7 +11,7 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 
 def complex_to_real(z):
     """
-    Converts a complex tensor into a real representation where the real
+    Converts a complex tensor into a vectorized real representation where the real
     part and the imaginary part are concatenated 
 
     Args:
@@ -25,7 +25,7 @@ def complex_to_real(z):
 
 def real_to_complex(x):
     """
-    Converts a real representation of a complex tensor into its associated 
+    Converts a real vectorized representation of a complex tensor into its associated 
     complex tensor (see the description of the complex_to_real(*args) function)
 
     Args:

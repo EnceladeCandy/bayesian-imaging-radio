@@ -105,14 +105,16 @@ def main(args):
     now = datetime.datetime.now()
 
     # Format the time as a string
-    time_string = now.strftime("%Y-%m-%d_%H:%M:%S")
+    time_string = now.strftime("%Y%m%d%H%M%S")
     filename = f"chi_samples_{sampler}_{time_string}.npz"
     filedir = os.path.join(save_dir, filename)
     
     # Saving 
     np.savez(filedir,
              chi_samples = chi_samples, 
-             sampling_params = sampling_params)
+             sampling_params = sampling_params,
+             dof = len(y) # Number of degrees of freedom
+             )
 
 
 if __name__ == "__main__": 
