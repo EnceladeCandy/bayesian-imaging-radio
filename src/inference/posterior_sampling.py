@@ -209,6 +209,7 @@ def pc_sampler(y, sigma_y, forward_model, score_model, score_likelihood, model_p
         print("score_likelihood arg is None. Sampling directly from the learned prior.")
     with torch.no_grad(): 
         for i in tqdm(range(pred_steps-1)): 
+            pbar.set_description(f"t = {t[0].item():.2f} | scale ~ {x.std():.2e} | sigma(t) = {sigma(t, score_model)[0].item():.2e} | mu(t) = {mu(t, score_model)[0].item():.2e}")
             
             # Sampling from the prior if no likelihood specified
             if score_likelihood is None:
