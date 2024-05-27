@@ -1,9 +1,3 @@
-"""
-Author: Noé Dia
-
-This code defines the forward model for the radio interferometric imaging task.
-"""
-
 import torch 
 import numpy as np
 from torch.func import vmap, grad
