@@ -49,7 +49,6 @@ def main(args):
         model_parameters = (S, B, C, pad)
         dataset = "skirt"
 
-
     # Sampling parameters
     sampler = args.sampler
     predictor = args.predictor
