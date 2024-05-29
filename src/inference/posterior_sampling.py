@@ -166,9 +166,6 @@ def old_pc_sampler(y, sigma_y, forward_model, score_model, score_likelihood, mod
             if keep_chain: 
                 chain.append(x.cpu().numpy())
 
-            if debug_mode and i==20: 
-                    break
-
         if keep_chain: 
             return x_mean, chain 
         else: 
