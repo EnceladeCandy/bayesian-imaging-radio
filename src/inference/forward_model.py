@@ -7,7 +7,8 @@ from posterior_sampling import sigma, mu, complex_to_real
 
 
 def ft(x): 
-    """Compute the orthonormal FFT 2D for x 
+    """Compute the orthonormal FFT 2D for x.
+    Note: In torch's convention, the DC component is expected to be at (0,0) before being passed to the fft. 
 
     Args:
         x (array): Two-dimensionnal numpy array or torch tensor
@@ -23,7 +24,8 @@ def ft(x):
     
 
 def ift(x): 
-    """Compute the orthonormal FFT 2D for x 
+    """Compute the orthonormal IFT 2D for x. 
+    Note: In torch's convention, the DC component is expected to be at (N/2, N/2) (i.e. the center of the image) before being passed to the ift. 
 
     Args:
         x (array): Two-dimensionnal numpy array or torch tensor
@@ -39,10 +41,16 @@ def ift(x):
     
 def ftshift(x):
     """
-    Fftshift the DC component of the input. 
+    Places the DC component of the input at the Nyquist Frequency (i.e. the center of the image for a square image). 
     Note: For even length inputs, fftshift and iftshift are equivalent. 
     """
     return torch.fft.fftshift(x)
+
+def iftshift(x):
+    """
+    Places the DC component as the zero-component of the image. 
+    """
+    return torch.fft.ifftshift(x)
 
 def link_function(x, B, C): 
     """Mapping from the model space (where the score model is trained) to the image space 
@@ -85,6 +93,11 @@ def noise_padding_dev(x, pad, sigma):
     out = out + z * mask
     return out
 
+def regular_padding(x, pad):
+    H, W = x.shape
+    out = torch.nn.functional.pad(x, (pad, pad, pad, pad))
+    return out
+
 def noise_padding(x, pad, sigma):
     H, W = x.shape
     out = torch.nn.functional.pad(x, (pad, pad, pad, pad)) 
@@ -96,7 +109,7 @@ def noise_padding(x, pad, sigma):
     out = out + z * mask
     return out
 
-def old_model(t, x, score_model, model_parameters): 
+def ancestral_model(t, x, score_model, model_parameters): 
     """Apply a physical model A to a ground-truth x.
 
     Args:
@@ -129,7 +142,7 @@ def old_model(t, x, score_model, model_parameters):
     y_hat = complex_to_real(vis_sampled)
     return y_hat
 
-def model(t, x, score_model, model_parameters): 
+def old_model(t, x, score_model, model_parameters): 
     """Apply a physical model A to a ground-truth x.
 
     Args:
@@ -152,6 +165,35 @@ def model(t, x, score_model, model_parameters):
     x_padded = link_function(x_padded, B=B, C=C)
     vis_sampled = ft(ftshift(x_padded)).squeeze()[sampling_function] # some troublesome bug makes the squeeze needed here
     y_hat = complex_to_real(vis_sampled)
+    return y_hat
+
+
+
+# TODO: ADD OPTION FOR BATCHED INPUT (in order to forward model multiple  
+def model(t, x, score_model, model_parameters): 
+    """Apply the physical model associated to a simplified version of a radiotelescope's measurement process. 
+    For stability reasons and to increase the resolution in Fourier space, noise padding was used. 
+
+    Args:
+        t (torch.Tensor): temperature in the sampling procedure of diffusion models.
+        x (torch.Tensor): ground-truth 
+        score_model (torch.Tensor): trained score-based model (= the score of a prior)
+        model_parameters (Tuple): list of parameters for the model (sampling_function, B, C)
+          - index 0: sampling function (mask selecting the measured visibilities in Fourier space, must have a shape (H, W) where H and W are the height
+            and width of the padded image respectively)
+          - index 1 and index 2: B and C, the link_function parameters (see function link_function)
+
+    Returns:
+        y_hat (torch.Tensor): model prediction
+    """
+        
+    sampling_function, B, C, pad = model_parameters
+    x = torch.flip(x, dims=[-1]) # Enforcing good orientation for the final image
+    x_padded = noise_padding(x.squeeze(), pad = pad, sigma = sigma(t, score_model))
+    x_padded = link_function(x_padded, B=B, C=C) # score model units to physical units (#TODO find the right link function)
+    vis_full = ft(iftshift(x_padded)) # iftshift to place the DC component at (0,0) as expected by torch.fft.fft2
+    vis_sampled = ftshift(vis_full).squeeze()[sampling_function] # DC component at the center of the image then mask with the sampling function
+    y_hat = complex_to_real(vis_sampled) # complex to vectorized real representation.
     return y_hat
 
 def log_likelihood(t, x, y, sigma_y, forward_model, score_model, model_parameters):
