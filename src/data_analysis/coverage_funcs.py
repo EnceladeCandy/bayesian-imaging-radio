@@ -207,13 +207,15 @@ def get_pqm_chi2(x_samples, y_samples, num_refs=100):
     counts_y = np.zeros(num_refs, dtype="int")
 
     print("Computing distances between posterior samples and reference points...")
-    for i, x in tqdm(enumerate(x_samples)):
+    for i in range(len(x_samples)):
+        x = x_samples[i]
         d = np.linalg.norm(x.reshape(1, -1) - refs, axis=-1)
         idx = np.argmin(d)
         counts_x[idx] += 1
 
-    print("Computing distances between ground-truths and reference points...")
-    for y in y_samples:
+    # print("Computing distances between ground-truths and reference points...")
+    for i in range(len(y_samples)):
+        y = y_samples[i]
         d = np.linalg.norm(y.reshape(1, -1) - refs, axis=-1)
         idx = np.argmin(d)
         counts_y[idx] += 1
