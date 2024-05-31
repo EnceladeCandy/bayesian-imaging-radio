@@ -239,10 +239,6 @@ def model_to_plot(t, x, score_model, model_parameters):
     vis_sampled = ft(x_padded) * sampling_function.to(torch.uint8)
     return torch.cat([vis_sampled.real, vis_sampled.imag])
 
-
-
-
-
 def old_log_likelihood(t, x, y, sigma_y, forward_model, score_model, model_parameters):
     """
     Compute the log-likelihood following the convolved likelihood approximation 
