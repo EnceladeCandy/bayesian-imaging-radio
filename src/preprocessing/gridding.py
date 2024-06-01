@@ -148,7 +148,7 @@ def main(args):
         target_name, _= os.path.splitext(basename)
         dirname = os.path.dirname(path)
         # Importing target parameters 
-        target_params_dir = os.path.join(dirname, "dsharp_params.json")
+        target_params_dir = os.path.join(dirname, "dsharp_params.json") # a file with the pixel scale info for each target. 
         with open(target_params_dir, 'r') as file:
             data = json.load(file) 
         pixel_scale, _, _ = data[target_name]
