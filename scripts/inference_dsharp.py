@@ -137,6 +137,7 @@ def main(args):
         else: 
             raise ValueError("Sampler specified does not exist; choose between 'pc' and 'euler'.") 
         
+        total_samples[i * batch_size: (i+1) * batch_size] = link_function(samples, B, C).cpu().numpy().astype(np.float32)
         if args.debug_mode:
              break
         
@@ -170,9 +171,9 @@ def main(args):
     if args.sanity_plot: 
             import matplotlib.pyplot as plt
             from astropy.visualization import ImageNormalize, AsinhStretch
-            norm = ImageNormalize((samples[0]/samples[0].max()).squeeze().cpu().numpy(), vmin = 0, stretch = AsinhStretch(a=0.05))
+            norm = ImageNormalize((total_samples[0]/total_samples[0].max()).squeeze().cpu().numpy(), vmin = 0, stretch = AsinhStretch(a=0.05))
             fig, axs = plt.subplots(1, 1, figsize = (8, 4))
-            im = axs.imshow((samples[0]/samples[0].max()).squeeze().cpu(), cmap = "magma", origin = "lower", norm = norm)
+            im = axs.imshow((total_samples[0]/total_samples[0].max()).squeeze().cpu(), cmap = "magma", origin = "lower", norm = norm)
             plt.colorbar(im, ax = axs, fraction = 0.046)
             axs.set_title("Posterior sample")
 
