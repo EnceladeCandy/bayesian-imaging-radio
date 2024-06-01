@@ -240,13 +240,13 @@ def model(t, x, score_model, model_parameters):
         
     sampling_function, B, C, pad, padding_mode = model_parameters
     if padding_mode == "noise":
-        padding = lambda x: noise_padding(x, pad = pad, sigma = sigma(t, score_model))
+        padding = lambda x, pad: noise_padding(x, pad, sigma = sigma(t, score_model))
     elif padding_mode == "zero": 
         padding = zero_padding
     x = flip(x) # Enforcing good orientation for the final image
     # x_padded = noise_padding(x.squeeze(), pad = pad, sigma = sigma(t, score_model))
     # x_padded = regular_padding(x, pad = pad)
-    x_padded = padding(x)
+    x_padded = padding(x, pad)
     x_padded = link_function(x_padded, B=B, C=C) # score model units to physical units (#TODO find the right link function)
     vis_full = ft(iftshift(x_padded)) # iftshift to place the DC component at (0,0), as expected by torch.fft.fft2
     vis_sampled = ftshift(vis_full).squeeze()[sampling_function] # DC component at the center of the image then mask with the sampling function (whose DC component is at the center of the image)
