@@ -6,7 +6,7 @@ import numpy as np
 from glob import glob 
 from score_models import ScoreModel
 sys.path.append("../src/inference")
-from forward_model import complex_to_real, score_likelihood, model
+from forward_model import complex_to_real, score_likelihood, model, link_function
 from utils import create_dir
 from posterior_sampling import euler_sampler, pc_sampler
 
@@ -165,19 +165,32 @@ def main(args):
     
     # Print Saving ! 
     print("Saving posterior samples...")
-    samples_dir = os.path.join(path_params, f"{target_name}_{THIS_WORKER}.npy")
+    samples_dir = os.path.join(path_params, f"{target_name}.npy")
     np.save(samples_dir, total_samples)
     print("Posterior samples saved !")
     if args.sanity_plot: 
             import matplotlib.pyplot as plt
             from astropy.visualization import ImageNormalize, AsinhStretch
-            norm = ImageNormalize((total_samples[0]/total_samples[0].max()).squeeze().cpu().numpy(), vmin = 0, stretch = AsinhStretch(a=0.05))
-            fig, axs = plt.subplots(1, 1, figsize = (8, 4))
-            im = axs.imshow((total_samples[0]/total_samples[0].max()).squeeze().cpu(), cmap = "magma", origin = "lower", norm = norm)
-            plt.colorbar(im, ax = axs, fraction = 0.046)
-            axs.set_title("Posterior sample")
+            from forward_model import ft, ift,ftshift, iftshift, flip
+            dirty_image = ftshift(ift(iftshift(vis_bin_re + 1j * vis_bin_imag))).real
+            Dy = yc-img_size//2
+            Uy = yc+img_size//2
+            Dx = xc-img_size//2
+            Ux = xc+img_size//2
+            dirty_image = flip(dirty_image[Dy:Uy, Dx:Ux]).cpu().numpy()
+            sample = np.load(samples_dir)[0] # just to make sure that we saved the right images.
+            norm_dirty = ImageNormalize((dirty_image/dirty_image.max()).squeeze(), vmin = 0, stretch = AsinhStretch(a=0.05))
+            norm_sample = ImageNormalize((sample/sample.max()).squeeze(), vmin = 0, stretch = AsinhStretch(a=0.05))
 
-            image_dir = os.path.join(path_params, "sanity.jpeg")
+            fig, axs = plt.subplots(1, 2, figsize = (8, 4))
+            im = axs[0].imshow((dirty_image/dirty_image.max()).squeeze(), cmap = "magma", origin = "lower", norm = norm_dirty)
+            plt.colorbar(im, ax = axs[0], fraction = 0.046)
+            axs[0].set_title("Dirty image")
+            im = axs[1].imshow((sample/sample.max()).squeeze(), cmap = "magma", origin = "lower", norm = norm_sample)
+            plt.colorbar(im, ax = axs[1], fraction = 0.046)
+            axs[1].set_title("Posterior sample")
+
+            image_dir = os.path.join(path_params, "sanity_plot.jpeg")
             plt.savefig(image_dir, bbox_inches = "tight")     
 
 
