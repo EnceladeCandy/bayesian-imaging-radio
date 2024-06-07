@@ -24,14 +24,15 @@ python $SCRIPT_DIR/inference_dsharp.py \
     --output_dir=$RESULTS_DIR \
     --img_size=256\
     --npix=4096\
-    --sampler=pc\
+    --sampler=euler\
     --num_samples=5\
     --batch_size=5\
     --predictor=4000\
     --corrector=1\
     --snr=0.1\
     --score_dir=$SKIRT \
-    --sanity_plot=True
+    --sanity_plot=True\
+    --padding_mode='zero'
 
     
     
