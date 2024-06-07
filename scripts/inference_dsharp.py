@@ -165,7 +165,7 @@ def main(args):
     
     # Print Saving ! 
     print("Saving posterior samples...")
-    samples_dir = os.path.join(path_params, f"{target_name}.npy")
+    samples_dir = os.path.join(path_params, f"{target_name}_{args.padding_mode}padding.npy")
     np.save(samples_dir, total_samples)
     print("Posterior samples saved !")
     if args.sanity_plot: 
